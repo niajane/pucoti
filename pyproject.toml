@@ -9,7 +9,9 @@ homepage = "https://github.com/ddorn/pucoti"
 repository = "https://github.com/ddorn/pucoti"
 keywords = ["timer", "countdown", "pygame"]
 include = [
-    "./assets",
+    "./assets/bell.mp3",
+    "./assets/Bevan-Regular.ttf",
+    "./assets/OFL-Bevan.txt",
 ]
 
 [tool.poetry.scripts]
