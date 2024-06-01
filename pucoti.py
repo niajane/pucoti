@@ -194,6 +194,63 @@ class DFont:
                 max_size = font_size
         return min_size - 1
 
+    def table(
+        self,
+        rows: list[list[str]],
+        size: int | tuple[int, int],
+        color: tuple[int, int, int] | list[tuple[int, int, int]],
+        title: str | None = None,
+        col_sep: str = "__",
+        align: int | list[int] = pg.FONT_LEFT,
+        title_color: tuple[int, int, int] | None = None,
+    ):
+        assert rows
+
+        cols = list(zip(*rows, strict=True))
+
+        if isinstance(align, int):
+            align = [align] * len(cols)
+        if isinstance(color, tuple):
+            color = [color] * len(cols)
+        assert len(align) == len(cols)
+        assert len(color) == len(cols)
+        if title_color is None:
+            title_color = color[0]
+
+        # It's a bit hard to size a table, we do it by creating a dummy text
+        # block that has the same size.
+        dummy_font = self.get_font(10)  # len() is not a good proxy for visual size.
+        longest_by_col = [max(col, key=lambda x: dummy_font.size(x)[0]) for col in cols]
+        long_line = col_sep.join(longest_by_col)
+        dummy_long_content = "\n".join([long_line] * len(rows))
+        if title:
+            dummy_long_content = title + "\n" + dummy_long_content
+
+        if not isinstance(size, int):
+            size = self.auto_size(dummy_long_content, size)
+
+        font = self.get_font(size)
+        surf = font.render(dummy_long_content, True, (0, 0, 0))
+        surf.fill((0, 0, 0, 0))
+        rect = surf.get_rect()
+
+        # Draw title
+        if title:
+            title_surf = font.render(title, True, title_color)
+            y = surf.blit(title_surf, (0, 0)).bottom
+        else:
+            y = 0
+
+        # Render each column
+        sep_width = font.size(col_sep)[0]
+        x = 0
+        for col, align, col_color in zip(cols, align, color):
+            col_surf = self.get_font(size, align).render("\n".join(col), True, col_color)
+            surf.blit(col_surf, (x, y))
+            x += col_surf.get_width() + sep_width
+
+        return surf
+
 
 def place_window(window, x: int, y: int):
     """Place the window at the desired position using sway."""
@@ -354,7 +411,11 @@ def main(
     nb_rings = 0
 
     purpose = ""
-    purpose_history = []
+    purpose_history = [
+        Purpose(**json.loads(line))
+        for line in history_file.read_text().splitlines()
+        if line.strip()
+    ]
     hide_total = False
 
     last_scene = None
@@ -439,37 +500,17 @@ def main(
 
         if help_rect := layout.get("help"):
             screen.fill(background_color)
-            title = "PICOTI Bindings\n\n"
-            spacing_text = "__"
-            keys, descriptions = zip(*[line.split(": ") for line in SHORTCUTS.split("\n")])
-            # Since we have two columns, we need them to fit the longest key and description.
-            # So we prentend the text is the longest possible for each line
-            longest_key = max(keys, key=len)
-            longest_desc = max(descriptions, key=len)
-            dummy_long_text = longest_key + spacing_text + longest_desc
-
-            text_for_sizing = title + "\n".join([dummy_long_text] * len(keys))
-            font_size = normal_font.auto_size(text_for_sizing, help_rect.size)
-            centered_rect = normal_font.render(text_for_sizing, font_size, timer_color).get_rect(
-                center=help_rect.center
+            title = "PICOTI Bindings"
+            s = normal_font.table(
+                [line.split(": ") for line in SHORTCUTS.split("\n")],  # type: ignore
+                help_rect.size,
+                [purpose_color, timer_color],
+                title=title,
+                col_sep=": ",
+                align=[pg.FONT_RIGHT, pg.FONT_LEFT],
+                title_color=timer_color,
             )
-            # Draw title
-            t = normal_font.render(title, font_size, timer_color)
-            r = screen.blit(t, t.get_rect(midtop=centered_rect.midtop))
-            # Draw shortcuts: two columns (right-aligned, left-aligned)
-            keys = normal_font.render(
-                "\n".join(keys), font_size, purpose_color, align=pg.FONT_RIGHT
-            )
-            descriptions = normal_font.render("\n".join(descriptions), font_size, timer_color)
-            left_column_end = centered_rect.left + keys.get_width()
-            middle_space = normal_font.get_font(font_size).size(spacing_text)[0]
-            screen.blit(keys, keys.get_rect(bottomright=(left_column_end, centered_rect.bottom)))
-            screen.blit(
-                descriptions,
-                descriptions.get_rect(
-                    bottomleft=(left_column_end + middle_space, centered_rect.bottom)
-                ),
-            )
+            screen.blit(s, s.get_rect(center=help_rect.center))
 
         if purpose_history_rect := layout.get("purpose_history"):
             screen.fill(background_color)
