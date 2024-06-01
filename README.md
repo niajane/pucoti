@@ -31,7 +31,11 @@ You can easily install PUCOTI using pip. Follow these steps:
 
 2. **Run PUCOTI:**
    ```sh
-   pucoti
+   pucoti 5m
    ```
 
 That's it! PUCOTI should now be up and running.
+
+## Usage
+
+![Usage](./cli-help.png)

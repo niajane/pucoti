@@ -30,6 +30,7 @@ from typing import Annotated
 from pathlib import Path
 import re
 import typer
+from typer import Argument, Option
 from enum import Enum
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
@@ -153,6 +154,10 @@ def place_window(window, x: int, y: int):
     if y < 0:
         y = size[1] + y - window.size[1]
 
+    # Is there a way to know if this worked? It doesn't on sway.
+    # It works on some platforms.
+    window.position = (x, y)
+
     try:
         cmd = f'swaymsg "[title=\\"DTimer\\"] move absolute position {x} {y}"'
         subprocess.check_output(cmd, shell=True)
@@ -176,13 +181,13 @@ def vsplit(rect, *ratios):
     ]
 
 
-def human_duration(*duration: str) -> int:
+def human_duration(duration: str) -> int:
     """Convert a human duration to seconds."""
 
     # Parse the duration.
     total = 0
     multiplier = {"s": 1, "m": 60, "h": 3600, "d": 86400}
-    for part in duration:
+    for part in duration.split():
         try:
             total += int(part[:-1]) * multiplier[part[-1]]
         except (ValueError, KeyError):
@@ -224,16 +229,17 @@ class Scene(Enum):
             raise ValueError(f"Invalid scene: {self}")
 
 
-app = typer.Typer(add_completion=False)
+app = typer.Typer(add_completion=False, pretty_exceptions_show_locals=False)
 
 
 @app.command()
 def main(
-    initial_timer: list[str],
-    bell: Annotated[Path, "Path to the bell sound file."] = BELL,
-    ring_every: int = 20,
-    ring_count: int = -1,
-    font: Annotated[Path, "Path to the font for all the text."] = FONT,
+    # fmt: off
+    initial_timer: Annotated[str, Argument(help="The initial timer duration.")] = "5m",
+    bell: Annotated[Path, Option(help="Path to the bell sound file.")] = BELL,
+    ring_every: Annotated[int, Option(help="The time between rings, in seconds.")] = 20,
+    ring_count: Annotated[int, Option(help="Number of rings played when the time is up.")] = -1,
+    font: Annotated[Path, Option(help="Path to the font for all text.")] = FONT,
     background_color: tuple[int, int, int] = (0, 0, 0),
     timer_color: tuple[int, int, int] = (255, 224, 145),
     timer_up_color: tuple[int, int, int] = (255, 0, 0),
@@ -241,12 +247,11 @@ def main(
     total_time_color: tuple[int, int, int] = (183, 183, 255),
     window_position: tuple[int, int] = (-5, -5),
     window_size: tuple[int, int] = (180, 70),
-    history_file: Annotated[Path, "Path to the file where the purpose history is stored."] = Path(
-        "~/.pucoti_history"
-    ),
+    history_file: Annotated[Path, Option(help="Path to the file where the purpose history is stored.")] = Path("~/.pucoti_history"),
+    # fmt: on
 ) -> None:
     """
-    DTimer is simple but flexible countdown timer.
+    Stay on task with PUCOTI, a countdown timer built for simplicity and purpose.
 
     Help is available by pressing h or ?.
     """
@@ -271,7 +276,7 @@ def main(
     position = 0
     place_window(window, *window_position)
 
-    initial_duration = human_duration(*initial_timer)
+    initial_duration = human_duration(initial_timer)
     start = time()
     timer = initial_duration
     last_rung = 0
