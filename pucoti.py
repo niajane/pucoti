@@ -338,8 +338,6 @@ class DFont:
         assert len(color) == len(cols)
         if title_color is None:
             title_color = color[0]
-        if header_line_color is None:
-            header_line_color = color[0]
 
         # It's a bit hard to size a table, we do it by creating a dummy text
         # block that has the same size.
@@ -544,12 +542,12 @@ def main(
     last_rung = 0
     nb_rings = 0
 
-    purpose = ""
     purpose_history = [
         Purpose(**json.loads(line))
         for line in history_file.read_text().splitlines()
         if line.strip()
     ]
+    purpose = purpose_history[-1].text if purpose_history else ""
     history_lines = 10
     history_scroll = 0  # From the bottom
     show_relative_time = True
@@ -562,7 +560,7 @@ def main(
     @atexit.register
     def save_last_purpose():
         if purpose:
-            Purpose(purpose).add_to_history(history_file)
+            Purpose("").add_to_history(history_file)
 
     while True:
         last_scene = scene
@@ -681,7 +679,7 @@ def main(
             hidden_rows = rows[:first_shown] + rows[last_shown:]
             rows = rows[first_shown:last_shown]
 
-            headers = ["Duration", "Purpose [J/K]", "Started [L]"]
+            headers = ["Span", "Purpose [J/K]", "Started [L]"]
             s = normal_font.table(
                 [headers] + rows,
                 purpose_history_rect.size,
