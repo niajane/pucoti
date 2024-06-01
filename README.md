@@ -18,7 +18,12 @@ Stay on task with PUCOTI, a countdown timer built for simplicity and purpose.
 
 PUCOTI is straightforward and gets the job done. Give it a try.
 
-![Screenshot](./screenshot.webp)
+## Screenshots
+
+![Screenshot](./assets/screenshot.webp)
+*Pucoti can be big...*
+![Screenshot](./assets/screenshot-small.webp)
+*... or stay in a corner*
 
 ## Installation
 
@@ -38,4 +43,4 @@ That's it! PUCOTI should now be up and running.
 
 ## Usage
 
-![Usage](./cli-help.webp)
+![Usage](./assets/cli-help.webp)
