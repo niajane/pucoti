@@ -80,7 +80,7 @@ def fmt_duration(seconds):
         return "%02d:%02d" % (minutes, seconds)
 
 
-def fmt_time(seconds):
+def fmt_time_relative(seconds):
     """
     Get a datetime object or a int() Epoch timestamp and return a
     pretty string like 'an hour ago', 'Yesterday', '3 months ago',
@@ -110,11 +110,10 @@ def fmt_time(seconds):
             return str(second_diff // 60) + "m ago"
         if second_diff < 7200:
             return f"1h {second_diff % 3600 // 60}m ago"
-        # If same day: at 12:34, show the time
-        if now.day == seconds.day:
-            return f"at {seconds.strftime('%H:%M')}"
+        if second_diff < 86400:
+            return str(second_diff // 3600) + "h ago"
     if day_diff <= 1:
-        return f"Yest at {seconds.strftime('%H:%M')}"
+        return "Yesterday"
     if day_diff < 7:
         return str(day_diff) + " days ago"
     if day_diff < 31:
@@ -122,6 +121,36 @@ def fmt_time(seconds):
     if day_diff < 365:
         return str(day_diff // 30) + " months ago"
     return str(day_diff // 365) + " years ago"
+
+
+def fmt_time_absoulte(seconds):
+    now = datetime.now()
+    if isinstance(seconds, (int, float)):
+        seconds = datetime.fromtimestamp(seconds)
+
+    diff = now - seconds
+    day_diff = diff.days
+
+    assert day_diff >= 0
+
+    if day_diff == 0:
+        return f"at {seconds.strftime('%H:%M')}"
+    if day_diff == 1:
+        return f"Yest at {seconds.strftime('%H:%M')}"
+    if day_diff < 7:  # e.g. Tue at 12:34
+        return f"{seconds.strftime('%a')} at {seconds.strftime('%H:%M')}"
+    # Same month: Tue 12 at 12:34
+    if day_diff < 31 and now.month == seconds.month:
+        return f"{seconds.strftime('%a %d')} at {seconds.strftime('%H:%M')}"
+    # Same year: Tue 12 Jan at 12:34
+    if now.year == seconds.year:
+        return f"{seconds.strftime('%a %d %b')} at {seconds.strftime('%H:%M')}"
+    # Full date: Tue 12 Jan 2023 at 12:34
+    return f"{seconds.strftime('%a %d %b %Y')} at {seconds.strftime('%H:%M')}"
+
+
+def fmt_time(seconds, relative=True):
+    return fmt_time_relative(seconds) if relative else fmt_time_absoulte(seconds)
 
 
 def color_from_name(name: str) -> tuple[int, int, int]:
@@ -390,7 +419,7 @@ class Scene(Enum):
     ENTERING_PURPOSE = "entering_purpose"
 
     def mk_layout(
-        self, screen_size: tuple[int, int], has_purpose: bool, no_total: bool = False
+        self, screen_size: tuple[float, float], has_purpose: bool, no_total: bool = False
     ) -> dict[str, pygame.Rect]:
         width, height = screen_size
         screen = pygame.Rect((0, 0), screen_size)
@@ -487,6 +516,7 @@ def main(
     ]
     history_lines = 10
     history_scroll = 0  # From the bottom
+    show_relative_time = True
     hide_total = False
 
     last_scene = None
@@ -521,6 +551,8 @@ def main(
                             len([p for p in purpose_history if p.text]) - history_lines,
                             history_scroll + 1,
                         )
+                    elif event.key == pg.K_l:
+                        show_relative_time = not show_relative_time
                     else:
                         scene = Scene.MAIN
                 elif event.key == pg.K_j:
@@ -603,7 +635,7 @@ def main(
                 [
                     fmt_duration(end_time - p.timestamp),
                     p.text,
-                    fmt_time(p.timestamp),
+                    fmt_time(p.timestamp, relative=show_relative_time),
                 ]
                 for p, end_time in zip(purpose_history, timestamps[1:], strict=True)
                 if p.text
