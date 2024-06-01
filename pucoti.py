@@ -19,7 +19,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 
+from datetime import datetime
 from dataclasses import dataclass
+import dataclasses
 from functools import lru_cache
 import json
 import os
@@ -33,6 +35,7 @@ import typer
 from typer import Argument, Option
 from enum import Enum
 import random
+import atexit
 
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
@@ -66,15 +69,59 @@ PUCOTI
 """.strip()
 
 
-def fmt_time(seconds):
+def fmt_duration(seconds):
     if seconds < 0:
-        return "-" + fmt_time(-seconds)
+        return "-" + fmt_duration(-seconds)
     minutes, seconds = divmod(seconds, 60)
     hours, minutes = divmod(minutes, 60)
     if hours:
         return "%d:%02d:%02d" % (hours, minutes, seconds)
     else:
         return "%02d:%02d" % (minutes, seconds)
+
+
+def fmt_time(seconds):
+    """
+    Get a datetime object or a int() Epoch timestamp and return a
+    pretty string like 'an hour ago', 'Yesterday', '3 months ago',
+    'just now', etc
+
+    Adapted from https://stackoverflow.com/a/1551394/6160055
+    """
+
+    now = datetime.now()
+    if isinstance(seconds, (int, float)):
+        seconds = datetime.fromtimestamp(seconds)
+
+    diff = now - seconds
+    second_diff = diff.seconds
+    day_diff = diff.days
+
+    assert day_diff >= 0
+
+    if day_diff == 0:
+        if second_diff < 10:
+            return "just now"
+        if second_diff < 60:
+            return str(second_diff) + "s ago"
+        if second_diff < 120:
+            return f"1m {second_diff % 60}s ago"
+        if second_diff < 3600:
+            return str(second_diff // 60) + "m ago"
+        if second_diff < 7200:
+            return f"1h {second_diff % 3600 // 60}m ago"
+        # If same day: at 12:34, show the time
+        if now.day == seconds.day:
+            return f"at {seconds.strftime('%H:%M')}"
+    if day_diff <= 1:
+        return f"Yest at {seconds.strftime('%H:%M')}"
+    if day_diff < 7:
+        return str(day_diff) + " days ago"
+    if day_diff < 31:
+        return str(day_diff // 7) + " weeks ago"
+    if day_diff < 365:
+        return str(day_diff // 30) + " months ago"
+    return str(day_diff // 365) + " years ago"
 
 
 def color_from_name(name: str) -> tuple[int, int, int]:
@@ -232,7 +279,6 @@ class DFont:
         font = self.get_font(size)
         surf = font.render(dummy_long_content, True, (0, 0, 0))
         surf.fill((0, 0, 0, 0))
-        rect = surf.get_rect()
 
         # Draw title
         if title:
@@ -310,7 +356,11 @@ def human_duration(duration: str) -> int:
 @dataclass
 class Purpose:
     text: str
-    timestamp: float
+    timestamp: float = dataclasses.field(default_factory=time)
+
+    def add_to_history(self, history_file: Path):
+        with history_file.open("a") as f:
+            f.write(json.dumps(self.__dict__) + "\n")
 
 
 class Scene(Enum):
@@ -421,6 +471,9 @@ def main(
     last_scene = None
     scene = Scene.MAIN
 
+    # Hook to save the last purpose end time when the program is closed.
+    atexit.register(lambda: Purpose("").add_to_history(history_file))
+
     while True:
         last_scene = scene
         for event in pygame.event.get():
@@ -460,10 +513,9 @@ def main(
                     scene = Scene.PURPOSE_HISTORY
 
         if last_scene == Scene.ENTERING_PURPOSE and scene != last_scene:
-            if purpose and (not purpose_history or purpose != purpose_history[-1].text):
-                purpose_history.append(Purpose(purpose, time()))
-                with history_file.open("a") as f:
-                    f.write(json.dumps(purpose_history[-1].__dict__) + "\n")
+            if not purpose_history or purpose != purpose_history[-1].text:
+                purpose_history.append(Purpose(purpose))
+                purpose_history[-1].add_to_history(history_file)
 
         layout = scene.mk_layout(window.size, bool(purpose), hide_total)
 
@@ -485,13 +537,13 @@ def main(
             remaining = timer - (time() - start)
             color = timer_up_color if remaining < 0 else timer_color
             t = big_font.render(
-                fmt_time(abs(remaining)), time_rect.size, color, monospaced_time=True
+                fmt_duration(abs(remaining)), time_rect.size, color, monospaced_time=True
             )
             screen.blit(t, t.get_rect(center=time_rect.center))
 
         if total_time_rect := layout.get("total_time"):
             t = normal_font.render(
-                fmt_time(time() - start),
+                fmt_duration(time() - start),
                 total_time_rect.size,
                 total_time_color,
                 monospaced_time=True,
@@ -499,7 +551,6 @@ def main(
             screen.blit(t, t.get_rect(center=total_time_rect.center))
 
         if help_rect := layout.get("help"):
-            screen.fill(background_color)
             title = "PICOTI Bindings"
             s = normal_font.table(
                 [line.split(": ") for line in SHORTCUTS.split("\n")],  # type: ignore
@@ -513,10 +564,30 @@ def main(
             screen.blit(s, s.get_rect(center=help_rect.center))
 
         if purpose_history_rect := layout.get("purpose_history"):
-            screen.fill(background_color)
-            t = "\n".join(f"({fmt_time(p.timestamp - start)}) {p.text}" for p in purpose_history)
-            t = normal_font.render("HISTORY\n" + t, purpose_history_rect.size, purpose_color)
-            screen.blit(t, t.get_rect(center=purpose_history_rect.center))
+            timestamps = [p.timestamp for p in purpose_history] + [time()]
+            rows = [
+                [
+                    fmt_duration(end_time - p.timestamp),
+                    p.text,
+                    fmt_time(p.timestamp),
+                ]
+                for p, end_time in zip(purpose_history, timestamps[1:])
+                if p.text
+            ]
+
+            s = normal_font.table(
+                rows[-10:],
+                purpose_history_rect.size,
+                [total_time_color, purpose_color, timer_color],
+                title="History",
+                col_sep=": ",
+                align=[pg.FONT_RIGHT, pg.FONT_LEFT, pg.FONT_RIGHT],
+                title_color=purpose_color,
+            )
+            screen.blit(s, s.get_rect(center=purpose_history_rect.center))
+            # t = "\n".join(f"({fmt_time(p.timestamp - start)}) {p.text}" for p in purpose_history)
+            # t = normal_font.render("HISTORY\n" + t, purpose_history_rect.size, purpose_color)
+            # screen.blit(t, t.get_rect(center=purpose_history_rect.center))
 
         # If \ is pressed, show the rects in locals()
         if pygame.key.get_pressed()[pg.K_BACKSLASH]:
