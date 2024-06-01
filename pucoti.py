@@ -37,12 +37,14 @@ os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 os.environ["SDL_VIDEODRIVER"] = "x11"
 
 import pygame
-from pygame.locals import *
+import pygame.locals as pg
 import pygame._sdl2 as sdl2
 
 
-BELL = Path(__file__).parent / "bell.mp3"
-FONT = Path(__file__).parent / "Wellbutrin.ttf"
+ASSETS = Path(__file__).parent / "assets"
+BELL = ASSETS / "bell.mp3"
+BIG_FONT = ASSETS / "Bevan-Regular.ttf"
+FONT = BIG_FONT
 WINDOW_SCALE = 1.2
 POSITIONS = [(-5, -5), (5, 5), (5, -5), (-5, 5)]
 SHORTCUTS = """
@@ -74,71 +76,112 @@ def fmt_time(seconds):
         return "%02d:%02d" % (minutes, seconds)
 
 
-@lru_cache(maxsize=40)
-def get_font(size: int):
-    return pygame.font.Font(FONT, size)
+class DFont:
+    def __init__(self, path: Path):
+        self.path = path
+        self.by_size = {}
 
+    def get_font(self, size: int) -> pygame.font.Font:
+        if size not in self.by_size:
+            self.by_size[size] = pygame.font.Font(self.path, size)
+        return self.by_size[size]
 
-@lru_cache(maxsize=100)
-def text(
-    text: str,
-    size: int | tuple[int, int],
-    color: tuple,
-    monospaced_time: bool = False,
-):
-    if not isinstance(size, int):
-        if monospaced_time:
-            # Use the font size that fits a text equivalent to the time.
-            # We use 0s to make sure the text is as wide as possible and doesn't jitter.
-            size = auto_size(re.sub(r"\d", "0", text), size)
-        else:
-            size = auto_size(text, size)
-
-    if not monospaced_time:
-        return get_font(size).render(text, True, color)
-    else:
-        digits = "0123456789"
-        # We render each char independently to make sure they are monospaced.
-        chars = [get_font(size).render(c, True, color) for c in text]
-        # Make each digit the size of a 0.
-        width = get_font(size).size("0")[0]
-        full_width = sum(s.get_width() if c not in digits else width for c, s in zip(text, chars))
-        # Create a surface with the correct width.
-        surf = pygame.Surface((full_width, chars[0].get_height()), SRCALPHA)
-        # Blit each char at the correct position.
-        x = 0
-        for c, s in zip(text, chars):
-            if c in digits:
-                blit_x = x + (width - s.get_width()) // 2
+    def render(
+        self,
+        text: str,
+        size: int | tuple[int, int],
+        color: tuple,
+        monospaced_time: bool = False,
+    ):
+        if not isinstance(size, int):
+            if monospaced_time:
+                # Use the font size that fits a text equivalent to the time.
+                # We use 0s to make sure the text is as wide as possible and doesn't jitter.
+                size = self.auto_size(re.sub(r"\d", "0", text), size)
             else:
-                blit_x = x
-            surf.blit(s, (blit_x, 0))
-            x += s.get_width() if c not in digits else width
-        return surf
+                size = self.auto_size(text, size)
 
+        font = self.get_font(size)
 
-def size_with_newlines(text: str, size: int):
-    """Return the size of the text with newlines."""
-    lines = text.split("\n")
-    line_height = get_font(size).get_linesize()
-    return (max(get_font(size).size(line)[0] for line in lines), len(lines) * line_height)
+        sizing = self.tight_size_with_newlines(text, size)
 
+        if not monospaced_time:
+            surf = font.render(text, True, color)
+            surf = surf.subsurface((0, -sizing.y_offset, surf.get_width(), sizing.height))
+            return surf
 
-def auto_size(text: str, max_rect: tuple[int, int]):
-    """Find the largest font size that will fit text in max_rect."""
-    # Use dichotomy to find the largest font size that will fit text in max_rect.
-
-    min_size = 1
-    max_size = max_rect[1]
-    while min_size < max_size:
-        font_size = (min_size + max_size) // 2
-        text_size = size_with_newlines(text, font_size)
-
-        if text_size[0] <= max_rect[0] and text_size[1] <= max_rect[1]:
-            min_size = font_size + 1
         else:
-            max_size = font_size
-    return min_size - 1
+            digits = "0123456789"
+            # We render each char independently to make sure they are monospaced.
+            chars = [font.render(c, True, color) for c in text]
+            # Make each digit the size of a 0.
+            width = font.size("0")[0]
+            full_width = sum(
+                s.get_width() if c not in digits else width for c, s in zip(text, chars)
+            )
+
+            # Create a surface with the correct width.
+            surf = pygame.Surface((full_width, sizing.height), pg.SRCALPHA)
+            # Blit each char at the correct position.
+            x = 0
+            for c, s in zip(text, chars):
+                if c in digits:
+                    blit_x = x + (width - s.get_width()) // 2
+                else:
+                    blit_x = x
+
+                surf.blit(s, (blit_x, sizing.y_offset))
+                x += s.get_width() if c not in digits else width
+
+            # If \ is pressed, show the metrics of the text.
+            if pygame.key.get_pressed()[pg.K_BACKSLASH]:
+                pygame.draw.rect(surf, (0, 255, 0), (0, 0, surf.get_width(), surf.get_height()), 1)
+
+            return surf
+
+    @dataclass
+    class TextSize:
+        width: int
+        height: int
+        y_offset: int
+
+    def tight_size_with_newlines(self, text: str, size: int) -> TextSize:
+        """Return the size of the text with newlines and if single line, without the extra space around it."""
+        lines = text.splitlines()
+        font = self.get_font(size)
+        line_height = font.get_height()
+        if not lines:
+            return self.TextSize(0, line_height, 0)
+        elif len(lines) == 1:
+            # If there is only one line, we can use the metrics to get the visible height,
+            # with much less space around the text. This is especially relevant for Bevan.
+            metrics = [m for m in font.metrics(text) if m is not None]
+            min_y = min(m[2] for m in metrics)
+            max_y = max(m[3] for m in metrics)
+            line_height = max_y - min_y
+            return self.TextSize(font.size(text)[0], line_height, -font.get_ascent() + max_y)
+        else:
+            return self.TextSize(
+                max(font.size(line)[0] for line in lines),
+                line_height * text.count("\n") + line_height,
+                0,
+            )
+
+    def auto_size(self, text: str, max_rect: tuple[int, int]):
+        """Find the largest font size that will fit text in max_rect."""
+        # Use dichotomy to find the largest font size that will fit text in max_rect.
+
+        min_size = 1
+        max_size = max_rect[1]
+        while min_size < max_size:
+            font_size = (min_size + max_size) // 2
+            text_size = self.tight_size_with_newlines(text, font_size)
+
+            if text_size.width <= max_rect[0] and text_size.height <= max_rect[1]:
+                min_size = font_size + 1
+            else:
+                max_size = font_size
+        return min_size - 1
 
 
 def place_window(window, x: int, y: int):
@@ -212,6 +255,9 @@ class Scene(Enum):
         width, height = screen_size
         screen = pygame.Rect((0, 0), screen_size)
 
+        if width > 200:
+            screen = screen.inflate(-width // 10, 0)
+
         if self == Scene.HELP:
             return {"help": screen}
         elif self == Scene.PURPOSE_HISTORY:
@@ -223,7 +269,7 @@ class Scene(Enum):
                 purpose, time = vsplit(screen, 2, 1)
                 return {"purpose": purpose, "time": time}
             else:
-                purpose, time, bottom = vsplit(screen, 2, 1, 1)
+                purpose, time, bottom = vsplit(screen, 2, 1, 0.5)
                 return {"purpose": purpose, "time": time, "total_time": bottom}
         elif self == Scene.MAIN:
             if height < 60:
@@ -243,7 +289,7 @@ class Scene(Enum):
             raise ValueError(f"Invalid scene: {self}")
 
 
-app = typer.Typer(add_completion=False, pretty_exceptions_show_locals=False)
+app = typer.Typer(add_completion=False)
 
 
 @app.command()
@@ -253,7 +299,8 @@ def main(
     bell: Annotated[Path, Option(help="Path to the bell sound file.")] = BELL,
     ring_every: Annotated[int, Option(help="The time between rings, in seconds.")] = 20,
     ring_count: Annotated[int, Option(help="Number of rings played when the time is up.")] = -1,
-    font: Annotated[Path, Option(help="Path to the font for all text.")] = FONT,
+    timer_font: Annotated[Path, Option(help="Path to the font for the timer.")] = BIG_FONT,
+    font: Annotated[Path, Option(help="Path to the font for all other text.")] = FONT,
     background_color: tuple[int, int, int] = (0, 0, 0),
     timer_color: tuple[int, int, int] = (255, 224, 145),
     timer_up_color: tuple[int, int, int] = (255, 0, 0),
@@ -270,8 +317,6 @@ def main(
     Help is available by pressing h or ?.
     """
 
-    global FONT
-    FONT = font
     history_file = history_file.expanduser()
     history_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -286,6 +331,8 @@ def main(
 
     screen = window.get_surface()
     clock = pygame.time.Clock()
+    big_font = DFont(timer_font)
+    normal_font = DFont(font)
 
     position = 0
     place_window(window, *window_position)
@@ -305,37 +352,37 @@ def main(
     while True:
         last_scene = scene
         for event in pygame.event.get():
-            if event.type == QUIT:
+            if event.type == pg.QUIT:
                 sys.exit()
-            elif event.type == KEYDOWN:
+            elif event.type == pg.KEYDOWN:
                 if scene in (Scene.HELP, Scene.PURPOSE_HISTORY):
                     scene = Scene.MAIN
                 if scene == Scene.ENTERING_PURPOSE:
-                    if event.key == K_BACKSPACE:
+                    if event.key == pg.K_BACKSPACE:
                         purpose = purpose[:-1]
-                    elif event.key in (K_RETURN, K_KP_ENTER, K_ESCAPE):
+                    elif event.key in (pg.K_RETURN, pg.K_KP_ENTER, pg.K_ESCAPE):
                         scene = Scene.MAIN
                     elif event.unicode:
                         purpose += event.unicode
-                elif event.key == K_j:
+                elif event.key == pg.K_j:
                     timer -= 60
-                elif event.key == K_k:
+                elif event.key == pg.K_k:
                     timer += 60
-                elif event.key == K_r:
+                elif event.key == pg.K_r:
                     # +1 to more likely show visually round time -> more satisfying
                     timer = initial_duration + (time() - start) + 1
-                elif event.key == K_MINUS:
+                elif event.key == pg.K_MINUS:
                     window.size = (window.size[0] / WINDOW_SCALE, window.size[1] / WINDOW_SCALE)
-                elif event.key == K_EQUALS:
+                elif event.key == pg.K_EQUALS:
                     window.size = (window.size[0] * WINDOW_SCALE, window.size[1] * WINDOW_SCALE)
-                elif event.key == K_p:
+                elif event.key == pg.K_p:
                     position = (position + 1) % len(POSITIONS)
                     place_window(window, *POSITIONS[position])
-                elif event.key in (K_RETURN, K_KP_ENTER):
+                elif event.key in (pg.K_RETURN, pg.K_KP_ENTER):
                     scene = Scene.ENTERING_PURPOSE
-                elif event.key in (K_h, K_QUESTION):
+                elif event.key in (pg.K_h, pg.K_QUESTION) and last_scene != Scene.HELP:
                     scene = Scene.HELP
-                elif event.key == K_l:
+                elif event.key == pg.K_l and last_scene != Scene.PURPOSE_HISTORY:
                     scene = Scene.PURPOSE_HISTORY
 
         if last_scene == Scene.ENTERING_PURPOSE and scene != last_scene:
@@ -350,7 +397,7 @@ def main(
 
         # Render purpose, if there is space.
         if purpose_rect := layout.get("purpose"):
-            t = text(purpose, purpose_rect.size, purpose_color)
+            t = normal_font.render(purpose, purpose_rect.size, purpose_color)
             r = screen.blit(t, t.get_rect(center=purpose_rect.center))
             if scene == Scene.ENTERING_PURPOSE and (time() % 1) < 0.7:
                 if r.height == 0:
@@ -363,11 +410,13 @@ def main(
         if time_rect := layout.get("time"):
             remaining = timer - (time() - start)
             color = timer_up_color if remaining < 0 else timer_color
-            t = text(fmt_time(abs(remaining)), time_rect.size, color, monospaced_time=True)
+            t = big_font.render(
+                fmt_time(abs(remaining)), time_rect.size, color, monospaced_time=True
+            )
             screen.blit(t, t.get_rect(center=time_rect.center))
 
         if total_time_rect := layout.get("total_time"):
-            t = text(
+            t = normal_font.render(
                 fmt_time(time() - start),
                 total_time_rect.size,
                 total_time_color,
@@ -377,20 +426,25 @@ def main(
 
         if help_rect := layout.get("help"):
             screen.fill(background_color)
-            t = text(HELP, help_rect.size, timer_color)
+            t = normal_font.render(HELP, help_rect.size, timer_color)
             screen.blit(t, t.get_rect(center=help_rect.center))
 
         if purpose_history_rect := layout.get("purpose_history"):
             screen.fill(background_color)
             t = "\n".join(f"({fmt_time(p.timestamp - start)}) {p.text}" for p in purpose_history)
-            t = text("HISTORY\n" + t, purpose_history_rect.size, purpose_color)
+            t = normal_font.render("HISTORY\n" + t, purpose_history_rect.size, purpose_color)
             screen.blit(t, t.get_rect(center=purpose_history_rect.center))
+
+        # If \ is pressed, show the layout rects
+        if pygame.key.get_pressed()[pg.K_BACKSLASH]:
+            for rect in layout.values():
+                pygame.draw.rect(screen, (255, 0, 0), rect, 1)
 
         # Ring the bell if the time is up.
         if remaining < 0 and time() - last_rung > ring_every and nb_rings != ring_count:
-            play(bell)
             last_rung = time()
             nb_rings += 1
+            play(bell)
         elif remaining > 0:
             nb_rings = 0
 
