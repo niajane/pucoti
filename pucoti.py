@@ -52,6 +52,7 @@ J/K: -/+ 1 minute
 R: reset timer
 RETURN: enter purpose
 L: list purpose history
+T: toggle total time
 P: reposition window
 -/=: (in/de)crease window size
 H/?: show this help
@@ -251,7 +252,9 @@ class Scene(Enum):
     PURPOSE_HISTORY = "purpose_history"
     ENTERING_PURPOSE = "entering_purpose"
 
-    def mk_layout(self, screen_size: tuple[int, int], has_purpose: bool) -> dict[str, pygame.Rect]:
+    def mk_layout(
+        self, screen_size: tuple[int, int], has_purpose: bool, no_total: bool = False
+    ) -> dict[str, pygame.Rect]:
         width, height = screen_size
         screen = pygame.Rect((0, 0), screen_size)
 
@@ -259,34 +262,33 @@ class Scene(Enum):
             screen = screen.inflate(-width // 10, 0)
 
         if self == Scene.HELP:
-            return {"help": screen}
+            layout = {"help": 1}
         elif self == Scene.PURPOSE_HISTORY:
-            return {"purpose_history": screen}
+            layout = {"purpose_history": 1}
         elif self == Scene.ENTERING_PURPOSE:
             if height < 60:
-                return {"purpose": screen}
+                layout = {"purpose": 1}
             elif height < 120:
-                purpose, time = vsplit(screen, 2, 1)
-                return {"purpose": purpose, "time": time}
+                layout = {"purpose": 2, "time": 1}
             else:
-                purpose, time, bottom = vsplit(screen, 2, 1, 0.5)
-                return {"purpose": purpose, "time": time, "total_time": bottom}
+                layout = {"purpose": 2, "time": 1, "total_time": 0.5}
         elif self == Scene.MAIN:
             if height < 60:
-                return {"time": screen}
+                layout = {"time": 1}
             elif height < 120:
-                if not has_purpose:
-                    return {"time": screen}
-                purpose, time = vsplit(screen, 1, 2)
-                return {"purpose": purpose, "time": time}
+                layout = {"purpose": 1, "time": 2}
             else:
-                if not has_purpose:
-                    time, bottom = vsplit(screen, 3, 1)
-                    return {"time": time, "total_time": bottom}
-                purpose, time, bottom = vsplit(screen, 1, 2, 1)
-                return {"purpose": purpose, "time": time, "total_time": bottom}
+                layout = {"purpose": 1, "time": 2, "total_time": 1}
+
+            if not has_purpose:
+                layout["time"] += layout.pop("purpose", 0)
         else:
             raise ValueError(f"Invalid scene: {self}")
+
+        if no_total:
+            layout.pop("total_time", None)
+
+        return {k: rect for k, rect in zip(layout.keys(), vsplit(screen, *layout.values()))}
 
 
 app = typer.Typer(add_completion=False)
@@ -345,6 +347,7 @@ def main(
 
     purpose = ""
     purpose_history = []
+    hide_total = False
 
     last_scene = None
     scene = Scene.MAIN
@@ -378,6 +381,8 @@ def main(
                 elif event.key == pg.K_p:
                     position = (position + 1) % len(POSITIONS)
                     place_window(window, *POSITIONS[position])
+                elif event.key == pg.K_t:
+                    hide_total = not hide_total
                 elif event.key in (pg.K_RETURN, pg.K_KP_ENTER):
                     scene = Scene.ENTERING_PURPOSE
                 elif event.key in (pg.K_h, pg.K_QUESTION) and last_scene != Scene.HELP:
@@ -391,7 +396,7 @@ def main(
                 with history_file.open("a") as f:
                     f.write(json.dumps(purpose_history[-1].__dict__) + "\n")
 
-        layout = scene.mk_layout(window.size, bool(purpose))
+        layout = scene.mk_layout(window.size, bool(purpose), hide_total)
 
         screen.fill(background_color)
 
