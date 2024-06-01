@@ -1,15 +1,17 @@
 [tool.poetry]
-name = "timer"
+name = "pucoti"
 version = "0.1.0"
-description = ""
+description = "A Purposeful Countdown Timer"
 authors = ["ddorn <diego.dorn@free.fr>"]
 readme = "README.md"
+
+[tool.poetry.scripts]
+pucoti = "pucoti:app"
 
 [tool.poetry.dependencies]
 python = "^3.12"
 pygame-ce = "^2.4.1"
 typer = "^0.12.3"
-
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.7.1"

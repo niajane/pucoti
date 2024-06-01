@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from functools import lru_cache
+import json
 import os
 import subprocess
 import sys
@@ -13,6 +14,7 @@ import typer
 from enum import Enum
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
+os.environ["SDL_VIDEODRIVER"] = "x11"
 
 import pygame
 from pygame.locals import *
@@ -30,7 +32,7 @@ HELP_COLOR = TIMER_COLOR
 WINDOW_SCALE = 1.2
 POSITIONS = [(-5, -5), (5, 5), (5, -5), (-5, 5)]
 INITIAL_SIZE = (180, 70)
-
+PURPOSE_HISTORY_FILE = Path("~/logs/dtimer_purpose_history.jsonl").expanduser()
 SHORTCUTS = """
 J/K: -/+ 1 minute
 R: reset timer
@@ -49,7 +51,7 @@ Press any key to dismiss this message.
 """.strip()
 
 
-os.environ["SDL_VIDEODRIVER"] = "x11"
+PURPOSE_HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 
 def fmt_time(seconds):
@@ -304,6 +306,8 @@ def main(initial_timer: list[str]):
         if last_scene == Scene.ENTERING_PURPOSE and scene != last_scene:
             if purpose and (not purpose_history or purpose != purpose_history[-1].text):
                 purpose_history.append(Purpose(purpose, time()))
+                with PURPOSE_HISTORY_FILE.open("a") as f:
+                    f.write(json.dumps(purpose_history[-1].__dict__) + "\n")
 
         screen.fill(BACKGROUND_COLOR)
 
