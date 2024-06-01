@@ -28,6 +28,7 @@ HELP = """
 DTimer
 
 j/k: -/+ 1 minute
+r: reset timer
 p: reposition window
 RETURN: enter purpose
 -/=: (in/de)crease window size
@@ -69,6 +70,8 @@ def text(
 ):
     if not isinstance(size, int):
         if monospaced_time:
+            # Use the font size that fits a text equivalent to the time.
+            # We use 0s to make sure the text is as wide as possible and doesn't jitter.
             size = auto_size(re.sub(r"\d", "0", text), size, big)
         else:
             size = auto_size(text, size, big)
@@ -170,7 +173,7 @@ def mk_layout(screen_size: tuple[int, int]) -> dict[str, pygame.Rect]:
         return {"purpose": purpose, "time": time, "total_time": bottom}
 
 
-def main():
+def main(initial_timer: int = 120):
     pygame.init()
     pygame.mixer.init()
     pygame.key.set_repeat(300, 20)
@@ -187,7 +190,7 @@ def main():
     place_window(window, *POSITIONS[position])
 
     start = time()
-    timer = 120
+    timer = initial_timer
     last_rung = 0
 
     purpose = ""
@@ -215,6 +218,9 @@ def main():
                     timer -= 60
                 elif event.key == K_k:
                     timer += 60
+                elif event.key == K_r:
+                    # +1 to more likely show visually round time -> more satisfying
+                    timer = initial_timer + (time() - start) + 1
                 elif event.key == K_MINUS:
                     window.size = (window.size[0] / WINDOW_SCALE, window.size[1] / WINDOW_SCALE)
                     layout = mk_layout(window.size)
@@ -243,16 +249,13 @@ def main():
         # Render time.
         if time_rect := layout.get("time"):
             remaining = timer - (time() - start)
-            remaining_text = fmt_time(abs(remaining))
-            # Use the font size that fits a text equivalent to the remaining time.
-            # We use 0s to make sure the text is as wide as possible and doesn't jitter.
             color = TEXT_TIMES_UP_COLOR if remaining < 0 else TIMER_COLOR
             t = text(fmt_time(abs(remaining)), time_rect.size, color, monospaced_time=True)
             screen.blit(t, t.get_rect(center=time_rect.center))
 
         if total_time_rect := layout.get("total_time"):
             t = text(
-                "Tot: " + fmt_time(time() - start),
+                fmt_time(time() - start),
                 total_time_rect.size,
                 TOTAL_TIME_COLOR,
                 monospaced_time=True,
