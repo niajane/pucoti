@@ -55,7 +55,7 @@ P: reposition window
 H/?: show this help
 """.strip()
 HELP = f"""
-DTimer
+PUCOTI
 
 {SHORTCUTS}
 
@@ -159,7 +159,7 @@ def place_window(window, x: int, y: int):
     window.position = (x, y)
 
     try:
-        cmd = f'swaymsg "[title=\\"DTimer\\"] move absolute position {x} {y}"'
+        cmd = f'swaymsg "[title=\\"PUCOTI\\"] move absolute position {x} {y}"'
         subprocess.check_output(cmd, shell=True)
     except subprocess.CalledProcessError as e:
         print(e.output)
@@ -280,7 +280,7 @@ def main(
     pygame.key.set_repeat(300, 20)
 
     pygame.print_debug_info()
-    window = sdl2.Window("DTimer", window_size, borderless=True, always_on_top=True)
+    window = sdl2.Window("PUCOTI", window_size, borderless=True, always_on_top=True)
     window.get_surface().fill((0, 0, 0))
     window.flip()
 
