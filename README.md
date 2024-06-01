@@ -20,10 +20,12 @@ PUCOTI is straightforward and gets the job done. Give it a try.
 
 ## Screenshots
 
-![Screenshot](./assets/screenshot.webp)
-*Pucoti can be big...*
-![Screenshot](./assets/screenshot-small.webp)
-*... or stay in a corner*
+### *Pucoti can be big...*
+![Screenshot of PUCOTI full-screen](./assets/screenshot.webp)
+### *... or stay in a corner*
+![Screenshot of PUCOTI in the bottom right of a screen](./assets/screenshot-small.webp)
+### *Keep track of your intentions*
+![Screenshot of PUCOTI showing the history of intentions](./assets/screenshot-history.webp)
 
 ## Installation
 

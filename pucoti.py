@@ -461,7 +461,6 @@ def main(
     pygame.mixer.init()
     pygame.key.set_repeat(300, 20)
 
-    pygame.print_debug_info()
     window = sdl2.Window("PUCOTI", window_size, borderless=True, always_on_top=True)
     window.get_surface().fill((0, 0, 0))
     window.flip()
