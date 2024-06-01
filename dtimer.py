@@ -181,7 +181,7 @@ def mk_layout(screen_size: tuple[int, int]) -> dict[str, pygame.Rect]:
         return {"purpose": purpose, "time": time, "total_time": bottom}
 
 
-def human_duration(duration: str) -> int:
+def human_duration(*duration: str) -> int:
     """Convert a human duration to seconds."""
 
     # Parse the duration.
@@ -200,7 +200,7 @@ app = typer.Typer(add_completion=False)
 
 
 @app.command()
-def main(initial_timer: Annotated[str, typer.Argument()] = "20m"):
+def main(initial_timer: list[str]):
     """
     DTimer is simple but flexible countdown timer.
 
@@ -222,8 +222,9 @@ def main(initial_timer: Annotated[str, typer.Argument()] = "20m"):
     position = 0
     place_window(window, *POSITIONS[position])
 
+    initial_duration = human_duration(*initial_timer)
     start = time()
-    timer = human_duration(initial_timer)
+    timer = initial_duration
     last_rung = 0
 
     purpose = ""
@@ -245,6 +246,8 @@ def main(initial_timer: Annotated[str, typer.Argument()] = "20m"):
                 elif entering_purpose:
                     if event.key == K_BACKSPACE:
                         purpose = purpose[:-1]
+                    elif event.key == K_ESCAPE:
+                        entering_purpose = False
                     elif event.unicode:
                         purpose += event.unicode
                 elif event.key == K_j:
@@ -253,7 +256,7 @@ def main(initial_timer: Annotated[str, typer.Argument()] = "20m"):
                     timer += 60
                 elif event.key == K_r:
                     # +1 to more likely show visually round time -> more satisfying
-                    timer = human_duration(initial_timer) + (time() - start) + 1
+                    timer = initial_duration + (time() - start) + 1
                 elif event.key == K_MINUS:
                     window.size = (window.size[0] / WINDOW_SCALE, window.size[1] / WINDOW_SCALE)
                     layout = mk_layout(window.size)
