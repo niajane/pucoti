@@ -5,11 +5,16 @@ import os
 import subprocess
 import sys
 from time import time
+from typing import Annotated
+from pathlib import Path
+import re
+import typer
+
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
+
 import pygame
 from pygame.locals import *
 import pygame._sdl2 as sdl2
-from pathlib import Path
-import re
 
 
 BELL = Path("./bell.mp3")
@@ -24,15 +29,18 @@ WINDOW_SCALE = 1.2
 POSITIONS = [(-5, -5), (5, 5), (5, -5), (-5, 5)]
 INITIAL_SIZE = (180, 70)
 
-HELP = """
-DTimer
-
+SHORTCUTS = """
 j/k: -/+ 1 minute
 r: reset timer
 p: reposition window
 RETURN: enter purpose
 -/=: (in/de)crease window size
 h/?: show this help
+""".strip()
+HELP = """
+DTimer
+
+{SHORTCUTS}
 
 Press any key to dismiss this message.
 """.strip()
@@ -173,7 +181,32 @@ def mk_layout(screen_size: tuple[int, int]) -> dict[str, pygame.Rect]:
         return {"purpose": purpose, "time": time, "total_time": bottom}
 
 
-def main(initial_timer: int = 120):
+def human_duration(duration: str) -> int:
+    """Convert a human duration to seconds."""
+
+    # Parse the duration.
+    total = 0
+    multiplier = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+    for part in duration:
+        try:
+            total += int(part[:-1]) * multiplier[part[-1]]
+        except (ValueError, KeyError):
+            raise ValueError(f"Invalid duration part: {part}")
+
+    return total
+
+
+app = typer.Typer(add_completion=False)
+
+
+@app.command()
+def main(initial_timer: Annotated[str, typer.Argument()] = "20m"):
+    """
+    DTimer is simple but flexible countdown timer.
+
+    Help is available by pressing h or ?.
+    """
+
     pygame.init()
     pygame.mixer.init()
     pygame.key.set_repeat(300, 20)
@@ -190,7 +223,7 @@ def main(initial_timer: int = 120):
     place_window(window, *POSITIONS[position])
 
     start = time()
-    timer = initial_timer
+    timer = human_duration(initial_timer)
     last_rung = 0
 
     purpose = ""
@@ -220,7 +253,7 @@ def main(initial_timer: int = 120):
                     timer += 60
                 elif event.key == K_r:
                     # +1 to more likely show visually round time -> more satisfying
-                    timer = initial_timer + (time() - start) + 1
+                    timer = human_duration(initial_timer) + (time() - start) + 1
                 elif event.key == K_MINUS:
                     window.size = (window.size[0] / WINDOW_SCALE, window.size[1] / WINDOW_SCALE)
                     layout = mk_layout(window.size)
@@ -277,4 +310,4 @@ def main(initial_timer: int = 120):
 
 
 if __name__ == "__main__":
-    main()
+    app()
