@@ -20,6 +20,20 @@ TEXT_TIMES_UP_COLOR = (255, 0, 0)
 BACKGROUND_COLOR = (0, 0, 0)
 WINDOW_SCALE = 1.2
 POSITIONS = [(-5, -5), (5, 5), (5, -5), (-5, 5)]
+INITIAL_SIZE = (180, 70)
+
+HELP = """
+DTimer
+
+j/k: -/+ 1 minute
+p: reposition window
+RETURN: enter purpose
+h/?: show this help
+-: decrease window size
+=: increase window size
+
+Press any key to dismiss this message.
+""".strip()
 
 
 os.environ['SDL_VIDEODRIVER'] = 'x11'
@@ -38,7 +52,9 @@ def fmt_time(seconds):
 @lru_cache(maxsize=10)
 def font(size: int, big: bool = True):
     name = "./Wellbutrin.ttf" if big else "./Wellbutrin.ttf"
-    return pygame.font.Font(name, size)
+    f = pygame.font.Font(name, size)
+    f.align = FONT_CENTER
+    return f
 
 
 @lru_cache(maxsize=1000)
@@ -70,6 +86,13 @@ def text(text: str, size: int | tuple[int, int], color: tuple, big: bool = True,
         return surf
 
 
+def size_with_newlines(text: str, size: int, big: bool = True):
+    """Return the size of the text with newlines."""
+    lines = text.split("\n")
+    line_height = font(size, big).get_linesize()
+    return (max(font(size, big).size(line)[0] for line in lines),
+            len(lines) * line_height)
+
 def auto_size(text: str, max_rect: pygame.Rect | tuple[int, int], big_font: bool = True):
     """Find the largest font size that will fit text in max_rect."""
     # Use dichotomy to find the largest font size that will fit text in max_rect.
@@ -80,7 +103,7 @@ def auto_size(text: str, max_rect: pygame.Rect | tuple[int, int], big_font: bool
     max_size = max_rect.height
     while min_size < max_size:
         font_size = (min_size + max_size) // 2
-        text_size = font(font_size, big_font).size(text)
+        text_size = size_with_newlines(text, font_size, big_font)
 
         if text_size[0] <= max_rect.width and text_size[1] <= max_rect.height:
             min_size = font_size + 1
@@ -138,22 +161,20 @@ def mk_layout(screen_size: tuple[int, int]) -> dict[str, pygame.Rect | int]:
 
 
 def main():
-    size = (180, 70)
     pygame.init()
     pygame.mixer.init()
     pygame.key.set_repeat(300, 20)
 
     pygame.print_debug_info()
-    window = sdl2.Window("DTimer", size, borderless=True)
+    window = sdl2.Window("DTimer", INITIAL_SIZE, borderless=True)
     window.get_surface().fill((0, 0, 0))
     window.flip()
 
+    screen = window.get_surface()
+    clock = pygame.time.Clock()
+
     position = 0
     place_window(window, *POSITIONS[position])
-
-    screen = window.get_surface()
-
-    clock = pygame.time.Clock()
 
     start = time()
     timer = 120
@@ -162,6 +183,7 @@ def main():
     purpose = ""
     entering_purpose = False
 
+    show_help = False
     layout = mk_layout(window.size)
 
     while True:
@@ -171,6 +193,7 @@ def main():
             elif event.type == VIDEORESIZE:
                 layout = mk_layout(window.size)
             elif event.type == KEYDOWN:
+                show_help = False
                 if event.key == K_RETURN:
                     entering_purpose = not entering_purpose
                 elif entering_purpose:
@@ -183,16 +206,16 @@ def main():
                 elif event.key == K_k:
                     timer += 60
                 elif event.key == K_MINUS:
-                    size = (int(size[0] / WINDOW_SCALE), int(size[1] / WINDOW_SCALE))
-                    window.size = size
+                    window.size = (window.size[0] / WINDOW_SCALE, window.size[1] / WINDOW_SCALE)
                     layout = mk_layout(window.size)
                 elif event.key == K_EQUALS:
-                    size = (int(size[0] * WINDOW_SCALE), int(size[1] * WINDOW_SCALE))
-                    window.size = size
+                    window.size = (window.size[0] * WINDOW_SCALE, window.size[1] * WINDOW_SCALE)
                     layout = mk_layout(window.size)
                 elif event.key == K_p:
                     position = (position + 1) % len(POSITIONS)
                     place_window(window, *POSITIONS[position])
+                elif event.key in (K_h, K_QUESTION):
+                    show_help = not show_help
 
         screen.fill(BACKGROUND_COLOR)
 
@@ -217,6 +240,11 @@ def main():
             color = TEXT_TIMES_UP_COLOR if remaining < 0 else TIMER_COLOR
             t = text(fmt_time(abs(remaining)), time_font_size, color, monospaced_time=True)
             screen.blit(t, t.get_rect(center=time_rect.center))
+
+        if show_help:
+            screen.fill((0, 0, 0, 200))
+            t = text(HELP, screen.get_size(), (255, 255, 255), big=False)
+            screen.blit(t, t.get_rect(center=screen.get_rect().center))
 
         # Ring the bell if the time is up.
         if remaining < 0 and time() - last_rung > RING_INTERVAL:
