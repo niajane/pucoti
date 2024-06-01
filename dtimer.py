@@ -17,6 +17,7 @@ RING_INTERVAL = 20
 PURPOSE_COLOR = (183, 255, 183)
 TIMER_COLOR = (255, 224, 145)
 TEXT_TIMES_UP_COLOR = (255, 0, 0)
+TOTAL_TIME_COLOR = (183, 183, 255)
 BACKGROUND_COLOR = (0, 0, 0)
 WINDOW_SCALE = 1.2
 POSITIONS = [(-5, -5), (5, 5), (5, -5), (-5, 5)]
@@ -28,9 +29,8 @@ DTimer
 j/k: -/+ 1 minute
 p: reposition window
 RETURN: enter purpose
+-/=: (in/de)crease window size
 h/?: show this help
--: decrease window size
-=: increase window size
 
 Press any key to dismiss this message.
 """.strip()
@@ -49,7 +49,7 @@ def fmt_time(seconds):
         return "%02d:%02d" % (minutes, seconds)
 
 
-@lru_cache(maxsize=10)
+@lru_cache(maxsize=40)
 def font(size: int, big: bool = True):
     name = "./Wellbutrin.ttf" if big else "./Wellbutrin.ttf"
     f = pygame.font.Font(name, size)
@@ -57,11 +57,14 @@ def font(size: int, big: bool = True):
     return f
 
 
-@lru_cache(maxsize=1000)
+@lru_cache(maxsize=100)
 def text(text: str, size: int | tuple[int, int], color: tuple, big: bool = True,
          monospaced_time: bool = False):
     if not isinstance(size, int):
-        size = auto_size(text, size, big)
+        if monospaced_time:
+            size = auto_size(re.sub(r"\d", "0", text), size, big)
+        else:
+            size = auto_size(text, size, big)
 
     if not monospaced_time:
         return font(size, big).render(text, True, color)
@@ -93,19 +96,17 @@ def size_with_newlines(text: str, size: int, big: bool = True):
     return (max(font(size, big).size(line)[0] for line in lines),
             len(lines) * line_height)
 
-def auto_size(text: str, max_rect: pygame.Rect | tuple[int, int], big_font: bool = True):
+def auto_size(text: str, max_rect: tuple[int, int], big_font: bool = True):
     """Find the largest font size that will fit text in max_rect."""
     # Use dichotomy to find the largest font size that will fit text in max_rect.
-    if not isinstance(max_rect, pygame.Rect):
-        max_rect = pygame.Rect((0, 0), max_rect)
 
     min_size = 1
-    max_size = max_rect.height
+    max_size = max_rect[1]
     while min_size < max_size:
         font_size = (min_size + max_size) // 2
         text_size = size_with_newlines(text, font_size, big_font)
 
-        if text_size[0] <= max_rect.width and text_size[1] <= max_rect.height:
+        if text_size[0] <= max_rect[0] and text_size[1] <= max_rect[1]:
             min_size = font_size + 1
         else:
             max_size = font_size
@@ -145,7 +146,7 @@ def vsplit(rect, *ratios):
     return [pygame.Rect(rect.left, ys[i], rect.width, ys[i + 1] - ys[i]) for i in range(len(ratios))]
 
 
-def mk_layout(screen_size: tuple[int, int]) -> dict[str, pygame.Rect | int]:
+def mk_layout(screen_size: tuple[int, int]) -> dict[str, pygame.Rect]:
     width, height = screen_size
     screen = pygame.Rect((0, 0), screen_size)
 
@@ -156,7 +157,7 @@ def mk_layout(screen_size: tuple[int, int]) -> dict[str, pygame.Rect | int]:
         return {"purpose": purpose, "time": time}
     else:
         purpose, time, bottom = vsplit(screen, 1, 2, 1)
-        return {"purpose": purpose, "time": time, "controls": bottom}
+        return {"purpose": purpose, "time": time, "total_time": bottom}
 
 
 
@@ -166,7 +167,7 @@ def main():
     pygame.key.set_repeat(300, 20)
 
     pygame.print_debug_info()
-    window = sdl2.Window("DTimer", INITIAL_SIZE, borderless=True)
+    window = sdl2.Window("DTimer", INITIAL_SIZE, borderless=True, always_on_top=True)
     window.get_surface().fill((0, 0, 0))
     window.flip()
 
@@ -236,10 +237,13 @@ def main():
             remaining_text = fmt_time(abs(remaining))
             # Use the font size that fits a text equivalent to the remaining time.
             # We use 0s to make sure the text is as wide as possible and doesn't jitter.
-            time_font_size = auto_size(re.sub(r"\d", "0", remaining_text), time_rect.size)
             color = TEXT_TIMES_UP_COLOR if remaining < 0 else TIMER_COLOR
-            t = text(fmt_time(abs(remaining)), time_font_size, color, monospaced_time=True)
+            t = text(fmt_time(abs(remaining)), time_rect.size, color, monospaced_time=True)
             screen.blit(t, t.get_rect(center=time_rect.center))
+
+        if total_time_rect := layout.get("total_time"):
+            t = text("Tot: " + fmt_time(time() - start), total_time_rect.size, TOTAL_TIME_COLOR, monospaced_time=True)
+            screen.blit(t, t.get_rect(center=total_time_rect.center))
 
         if show_help:
             screen.fill((0, 0, 0, 200))
