@@ -9,6 +9,7 @@ from pygame.locals import *
 import pygame._sdl2 as sdl2
 from pathlib import Path
 from pygame.math import Vector2
+import re
 
 
 BELL = Path("./bell.mp3")
@@ -121,6 +122,21 @@ def vsplit(rect, *ratios):
     return [pygame.Rect(rect.left, ys[i], rect.width, ys[i + 1] - ys[i]) for i in range(len(ratios))]
 
 
+def mk_layout(screen_size: tuple[int, int]) -> dict[str, pygame.Rect | int]:
+    width, height = screen_size
+    screen = pygame.Rect((0, 0), screen_size)
+
+    if height < 60:
+        return {"time": screen}
+    elif height < 120:
+        purpose, time = vsplit(screen, 1, 2)
+        return {"purpose": purpose, "time": time}
+    else:
+        purpose, time, bottom = vsplit(screen, 1, 2, 1)
+        return {"purpose": purpose, "time": time, "controls": bottom}
+
+
+
 def main():
     size = (180, 70)
     pygame.init()
@@ -137,7 +153,6 @@ def main():
 
     screen = window.get_surface()
 
-    font_size = auto_size("00:00", screen.get_rect())
     clock = pygame.time.Clock()
 
     start = time()
@@ -147,13 +162,14 @@ def main():
     purpose = ""
     entering_purpose = False
 
+    layout = mk_layout(window.size)
+
     while True:
         for event in pygame.event.get():
             if event.type == QUIT:
                 sys.exit()
             elif event.type == VIDEORESIZE:
-                size = event.dict['size']
-                font_size = auto_size("00:00", screen.get_rect())
+                layout = mk_layout(window.size)
             elif event.type == KEYDOWN:
                 if event.key == K_RETURN:
                     entering_purpose = not entering_purpose
@@ -169,21 +185,19 @@ def main():
                 elif event.key == K_MINUS:
                     size = (int(size[0] / WINDOW_SCALE), int(size[1] / WINDOW_SCALE))
                     window.size = size
-                    font_size = auto_size("00:00", screen.get_rect())
+                    layout = mk_layout(window.size)
                 elif event.key == K_EQUALS:
                     size = (int(size[0] * WINDOW_SCALE), int(size[1] * WINDOW_SCALE))
                     window.size = size
-                    font_size = auto_size("00:00", screen.get_rect())
+                    layout = mk_layout(window.size)
                 elif event.key == K_p:
                     position = (position + 1) % len(POSITIONS)
                     place_window(window, *POSITIONS[position])
 
         screen.fill(BACKGROUND_COLOR)
 
-        if window.size[1] > 60:
-            # Split the window in three areas: top,25%,purpose - middle,50%,time - bottom,25%,controls
-            purpose_rect, time_rect, controls_rect = vsplit(screen.get_rect(), 1, 2, 1)
-
+        # Render purpose, if there is space.
+        if purpose_rect := layout.get("purpose"):
             t = text(purpose, purpose_rect.size, PURPOSE_COLOR)
             r = screen.blit(t, t.get_rect(center=purpose_rect.center))
             if entering_purpose and (time() % 1) < 0.7:
@@ -193,17 +207,18 @@ def main():
                     r.right = purpose_rect.right - 3
                 pygame.draw.line(screen, PURPOSE_COLOR, r.topright, r.bottomright, 2)
 
+        # Render time.
+        if time_rect := layout.get("time"):
+            remaining = timer - (time() - start)
+            remaining_text = fmt_time(abs(remaining))
+            # Use the font size that fits a text equivalent to the remaining time.
+            # We use 0s to make sure the text is as wide as possible and doesn't jitter.
+            time_font_size = auto_size(re.sub(r"\d", "0", remaining_text), time_rect.size)
+            color = TEXT_TIMES_UP_COLOR if remaining < 0 else TIMER_COLOR
+            t = text(fmt_time(abs(remaining)), time_font_size, color, monospaced_time=True)
+            screen.blit(t, t.get_rect(center=time_rect.center))
 
-        else:
-            # Only show the time.
-            time_rect = screen.get_rect()
-
-
-        remaining = timer - (time() - start)
-        color = TEXT_TIMES_UP_COLOR if remaining < 0 else TIMER_COLOR
-        t = text(fmt_time(abs(remaining)), time_rect.size, color, monospaced_time=True)
-        screen.blit(t, t.get_rect(center=time_rect.center))
-
+        # Ring the bell if the time is up.
         if remaining < 0 and time() - last_rung > RING_INTERVAL:
             play(BELL)
             last_rung = time()
