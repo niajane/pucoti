@@ -250,7 +250,20 @@ class DFont:
         col_sep: str = "__",
         align: int | list[int] = pg.FONT_LEFT,
         title_color: tuple[int, int, int] | None = None,
+        hidden_rows: list[list[str]] = [],
     ):
+        """Render a table with the given rows and size.
+
+        Args:
+            rows: The rows of the table.
+            size: The font size of the table. If this is a tuple, the table is the largest that can fit in this (width, height).
+            color: The text color of each column. If this is a tuple, it is used for all columns.
+            title: The optional title of the table.
+            col_sep: Text whose width will be used to separate columns.
+            align: The alignment of each column. If this is an int, it is be used for all columns.
+            title_color: The color of the title. If omitted, the color of the first column is be used.
+            hidden_rows: Rows that are not rendered, but are used to size the table. Prevents change of size when scrolling.
+        """
         assert rows
 
         cols = list(zip(*rows, strict=True))
@@ -267,7 +280,8 @@ class DFont:
         # It's a bit hard to size a table, we do it by creating a dummy text
         # block that has the same size.
         dummy_font = self.get_font(10)  # len() is not a good proxy for visual size.
-        longest_by_col = [max(col, key=lambda x: dummy_font.size(x)[0]) for col in cols]
+        cols_with_hidden = list(zip(*rows, *hidden_rows, strict=True))
+        longest_by_col = [max(col, key=lambda x: dummy_font.size(x)[0]) for col in cols_with_hidden]
         long_line = col_sep.join(longest_by_col)
         dummy_long_content = "\n".join([long_line] * len(rows))
         if title:
@@ -589,7 +603,10 @@ def main(
                 for p, end_time in zip(purpose_history, timestamps[1:], strict=True)
                 if p.text
             ]
-            rows = rows[len(rows) - history_lines - history_scroll : len(rows) - history_scroll]
+            first_shown = len(rows) - history_lines - history_scroll
+            last_shown = len(rows) - history_scroll
+            hidden_rows = rows[:first_shown] + rows[last_shown:]
+            rows = rows[first_shown:last_shown]
 
             s = normal_font.table(
                 rows,
@@ -599,6 +616,7 @@ def main(
                 col_sep=": ",
                 align=[pg.FONT_RIGHT, pg.FONT_LEFT, pg.FONT_RIGHT],
                 title_color=purpose_color,
+                hidden_rows=hidden_rows,
             )
             screen.blit(s, s.get_rect(center=purpose_history_rect.center))
 
