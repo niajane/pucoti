@@ -303,11 +303,17 @@ class DFont:
 
         # Render each column
         sep_width = font.size(col_sep)[0]
+        column_widths = [font.size(longest)[0] for longest in longest_by_col]
         x = 0
-        for col, align, col_color in zip(cols, align, color):
+        for col, align, col_color, width in zip(cols, align, color, column_widths):
             col_surf = self.get_font(size, align).render("\n".join(col), True, col_color)
-            surf.blit(col_surf, (x, y))
-            x += col_surf.get_width() + sep_width
+            if align == pg.FONT_LEFT:
+                surf.blit(col_surf, (x, y))
+            elif align == pg.FONT_RIGHT:
+                surf.blit(col_surf, (x + width - col_surf.get_width(), y))
+            elif align == pg.FONT_CENTER:
+                surf.blit(col_surf, (x + (width - col_surf.get_width()) // 2, y))
+            x += width + sep_width
 
         return surf
 
