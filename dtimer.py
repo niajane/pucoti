@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 from functools import lru_cache
 import os
 import subprocess
@@ -8,7 +9,6 @@ import pygame
 from pygame.locals import *
 import pygame._sdl2 as sdl2
 from pathlib import Path
-from pygame.math import Vector2
 import re
 
 
@@ -36,7 +36,8 @@ Press any key to dismiss this message.
 """.strip()
 
 
-os.environ['SDL_VIDEODRIVER'] = 'x11'
+os.environ["SDL_VIDEODRIVER"] = "x11"
+
 
 def fmt_time(seconds):
     if seconds < 0:
@@ -58,8 +59,13 @@ def font(size: int, big: bool = True):
 
 
 @lru_cache(maxsize=100)
-def text(text: str, size: int | tuple[int, int], color: tuple, big: bool = True,
-         monospaced_time: bool = False):
+def text(
+    text: str,
+    size: int | tuple[int, int],
+    color: tuple,
+    big: bool = True,
+    monospaced_time: bool = False,
+):
     if not isinstance(size, int):
         if monospaced_time:
             size = auto_size(re.sub(r"\d", "0", text), size, big)
@@ -93,8 +99,8 @@ def size_with_newlines(text: str, size: int, big: bool = True):
     """Return the size of the text with newlines."""
     lines = text.split("\n")
     line_height = font(size, big).get_linesize()
-    return (max(font(size, big).size(line)[0] for line in lines),
-            len(lines) * line_height)
+    return (max(font(size, big).size(line)[0] for line in lines), len(lines) * line_height)
+
 
 def auto_size(text: str, max_rect: tuple[int, int], big_font: bool = True):
     """Find the largest font size that will fit text in max_rect."""
@@ -132,6 +138,7 @@ def place_window(window, x: int, y: int):
     except subprocess.CalledProcessError as e:
         print(e.output)
 
+
 def play(sound):
     pygame.mixer.music.load(sound)
     pygame.mixer.music.play()
@@ -143,7 +150,9 @@ def vsplit(rect, *ratios):
     ratios = [r / total_ratio for r in ratios]
     cummulative_ratios = [0] + [sum(ratios[:i]) for i in range(1, len(ratios) + 1)]
     ys = [int(rect.height * r) for r in cummulative_ratios]
-    return [pygame.Rect(rect.left, ys[i], rect.width, ys[i + 1] - ys[i]) for i in range(len(ratios))]
+    return [
+        pygame.Rect(rect.left, ys[i], rect.width, ys[i + 1] - ys[i]) for i in range(len(ratios))
+    ]
 
 
 def mk_layout(screen_size: tuple[int, int]) -> dict[str, pygame.Rect]:
@@ -158,7 +167,6 @@ def mk_layout(screen_size: tuple[int, int]) -> dict[str, pygame.Rect]:
     else:
         purpose, time, bottom = vsplit(screen, 1, 2, 1)
         return {"purpose": purpose, "time": time, "total_time": bottom}
-
 
 
 def main():
@@ -242,7 +250,12 @@ def main():
             screen.blit(t, t.get_rect(center=time_rect.center))
 
         if total_time_rect := layout.get("total_time"):
-            t = text("Tot: " + fmt_time(time() - start), total_time_rect.size, TOTAL_TIME_COLOR, monospaced_time=True)
+            t = text(
+                "Tot: " + fmt_time(time() - start),
+                total_time_rect.size,
+                TOTAL_TIME_COLOR,
+                monospaced_time=True,
+            )
             screen.blit(t, t.get_rect(center=total_time_rect.center))
 
         if show_help:
@@ -259,8 +272,5 @@ def main():
         clock.tick(60)
 
 
-
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
