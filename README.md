@@ -17,3 +17,21 @@ Stay on task with PUCOTI, a countdown timer built for simplicity and purpose.
 - **Basic Controls**: Add or subtract time, reset the timer, but not more.
 
 PUCOTI is straightforward and gets the job done. Give it a try.
+
+![Screenshot](./screenshot.png)
+
+## Installation
+
+You can easily install PUCOTI using pip. Follow these steps:
+
+1. **Install PUCOTI:**
+   ```sh
+   pip install pucoti
+   ```
+
+2. **Run PUCOTI:**
+   ```sh
+   pucoti
+   ```
+
+That's it! PUCOTI should now be up and running.
