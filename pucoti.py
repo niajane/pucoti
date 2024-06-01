@@ -466,13 +466,18 @@ def main(
         for line in history_file.read_text().splitlines()
         if line.strip()
     ]
+    history_lines = 10
+    history_scroll = 0  # From the bottom
     hide_total = False
 
     last_scene = None
     scene = Scene.MAIN
 
     # Hook to save the last purpose end time when the program is closed.
-    atexit.register(lambda: Purpose("").add_to_history(history_file))
+    @atexit.register
+    def save_last_purpose():
+        if purpose:
+            Purpose(purpose).add_to_history(history_file)
 
     while True:
         last_scene = scene
@@ -480,15 +485,25 @@ def main(
             if event.type == pg.QUIT:
                 sys.exit()
             elif event.type == pg.KEYDOWN:
-                if scene in (Scene.HELP, Scene.PURPOSE_HISTORY):
+                if scene == Scene.HELP:
                     scene = Scene.MAIN
-                if scene == Scene.ENTERING_PURPOSE:
+                elif scene == Scene.ENTERING_PURPOSE:
                     if event.key == pg.K_BACKSPACE:
                         purpose = purpose[:-1]
                     elif event.key in (pg.K_RETURN, pg.K_KP_ENTER, pg.K_ESCAPE):
                         scene = Scene.MAIN
                     elif event.unicode:
                         purpose += event.unicode
+                elif scene == Scene.PURPOSE_HISTORY:
+                    if event.key == pg.K_j:
+                        history_scroll = max(0, history_scroll - 1)
+                    elif event.key == pg.K_k:
+                        history_scroll = min(
+                            len([p for p in purpose_history if p.text]) - history_lines,
+                            history_scroll + 1,
+                        )
+                    else:
+                        scene = Scene.MAIN
                 elif event.key == pg.K_j:
                     timer -= 60
                 elif event.key == pg.K_k:
@@ -507,9 +522,9 @@ def main(
                     hide_total = not hide_total
                 elif event.key in (pg.K_RETURN, pg.K_KP_ENTER):
                     scene = Scene.ENTERING_PURPOSE
-                elif event.key in (pg.K_h, pg.K_QUESTION) and last_scene != Scene.HELP:
+                elif event.key in (pg.K_h, pg.K_QUESTION):
                     scene = Scene.HELP
-                elif event.key == pg.K_l and last_scene != Scene.PURPOSE_HISTORY:
+                elif event.key == pg.K_l:
                     scene = Scene.PURPOSE_HISTORY
 
         if last_scene == Scene.ENTERING_PURPOSE and scene != last_scene:
@@ -571,12 +586,13 @@ def main(
                     p.text,
                     fmt_time(p.timestamp),
                 ]
-                for p, end_time in zip(purpose_history, timestamps[1:])
+                for p, end_time in zip(purpose_history, timestamps[1:], strict=True)
                 if p.text
             ]
+            rows = rows[len(rows) - history_lines - history_scroll : len(rows) - history_scroll]
 
             s = normal_font.table(
-                rows[-10:],
+                rows,
                 purpose_history_rect.size,
                 [total_time_color, purpose_color, timer_color],
                 title="History",
@@ -585,9 +601,6 @@ def main(
                 title_color=purpose_color,
             )
             screen.blit(s, s.get_rect(center=purpose_history_rect.center))
-            # t = "\n".join(f"({fmt_time(p.timestamp - start)}) {p.text}" for p in purpose_history)
-            # t = normal_font.render("HISTORY\n" + t, purpose_history_rect.size, purpose_color)
-            # screen.blit(t, t.get_rect(center=purpose_history_rect.center))
 
         # If \ is pressed, show the rects in locals()
         if pygame.key.get_pressed()[pg.K_BACKSLASH]:
