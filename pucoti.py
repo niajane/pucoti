@@ -153,9 +153,39 @@ def fmt_time(seconds, relative=True):
     return fmt_time_relative(seconds) if relative else fmt_time_absoulte(seconds)
 
 
+def shorten(text: str, max_len: int) -> str:
+    """Shorten a text to max_len characters, adding ... if necessary."""
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 3] + "..."  # 3 for the ...
+
+
 def color_from_name(name: str) -> tuple[int, int, int]:
     instance = random.Random(name)
     return instance.randint(0, 255), instance.randint(0, 255), instance.randint(0, 255)
+
+
+def blit_aligned(
+    surf: pygame.Surface,
+    to_blit: pygame.Surface,
+    y: int,
+    align: int = pg.FONT_LEFT,
+    left: int | None = None,
+    right: int | None = None,
+) -> pygame.Rect:
+    if left is None:
+        left = 0
+    if right is None:
+        right = surf.get_width()
+
+    if align == pg.FONT_LEFT:
+        return surf.blit(to_blit, (left, y))
+    elif align == pg.FONT_RIGHT:
+        return surf.blit(to_blit, (right - to_blit.get_width(), y))
+    elif align == pg.FONT_CENTER:
+        return surf.blit(to_blit, ((left + right - to_blit.get_width()) // 2, y))
+    else:
+        raise ValueError(f"Invalid alignment: {align}")
 
 
 class DFont:
@@ -279,7 +309,9 @@ class DFont:
         col_sep: str = "__",
         align: int | list[int] = pg.FONT_LEFT,
         title_color: tuple[int, int, int] | None = None,
+        title_align: int = pg.FONT_CENTER,
         hidden_rows: list[list[str]] = [],
+        header_line_color: tuple[int, int, int] | None = None,
     ):
         """Render a table with the given rows and size.
 
@@ -292,6 +324,7 @@ class DFont:
             align: The alignment of each column. If this is an int, it is be used for all columns.
             title_color: The color of the title. If omitted, the color of the first column is be used.
             hidden_rows: Rows that are not rendered, but are used to size the table. Prevents change of size when scrolling.
+            header_line_color: Draw a line after the first row with this color.
         """
         assert rows
 
@@ -305,6 +338,8 @@ class DFont:
         assert len(color) == len(cols)
         if title_color is None:
             title_color = color[0]
+        if header_line_color is None:
+            header_line_color = color[0]
 
         # It's a bit hard to size a table, we do it by creating a dummy text
         # block that has the same size.
@@ -326,23 +361,24 @@ class DFont:
         # Draw title
         if title:
             title_surf = font.render(title, True, title_color)
-            y = surf.blit(title_surf, (0, 0)).bottom
+            y = blit_aligned(surf, title_surf, 0, title_align).bottom
         else:
             y = 0
 
-        # Render each column
         sep_width = font.size(col_sep)[0]
         column_widths = [font.size(longest)[0] for longest in longest_by_col]
+
+        # Render each column
         x = 0
         for col, align, col_color, width in zip(cols, align, color, column_widths):
             col_surf = self.get_font(size, align).render("\n".join(col), True, col_color)
-            if align == pg.FONT_LEFT:
-                surf.blit(col_surf, (x, y))
-            elif align == pg.FONT_RIGHT:
-                surf.blit(col_surf, (x + width - col_surf.get_width(), y))
-            elif align == pg.FONT_CENTER:
-                surf.blit(col_surf, (x + (width - col_surf.get_width()) // 2, y))
+            blit_aligned(surf, col_surf, y, align, x, x + width)
             x += width + sep_width
+
+        # Draw a line under the header
+        if header_line_color is not None:
+            y += font.get_height()
+            pygame.draw.line(surf, header_line_color, (0, y), (surf.get_width(), y), 1)
 
         return surf
 
@@ -634,7 +670,7 @@ def main(
             rows = [
                 [
                     fmt_duration(end_time - p.timestamp),
-                    p.text,
+                    shorten(p.text, 40),
                     fmt_time(p.timestamp, relative=show_relative_time),
                 ]
                 for p, end_time in zip(purpose_history, timestamps[1:], strict=True)
@@ -645,8 +681,9 @@ def main(
             hidden_rows = rows[:first_shown] + rows[last_shown:]
             rows = rows[first_shown:last_shown]
 
+            headers = ["Duration", "Purpose [J/K]", "Started [L]"]
             s = normal_font.table(
-                rows,
+                [headers] + rows,
                 purpose_history_rect.size,
                 [total_time_color, purpose_color, timer_color],
                 title="History",
@@ -654,6 +691,7 @@ def main(
                 align=[pg.FONT_RIGHT, pg.FONT_LEFT, pg.FONT_RIGHT],
                 title_color=purpose_color,
                 hidden_rows=hidden_rows,
+                header_line_color=purpose_color,
             )
             screen.blit(s, s.get_rect(center=purpose_history_rect.center))
 
