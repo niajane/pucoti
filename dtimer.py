@@ -19,6 +19,7 @@ TIMER_COLOR = (255, 224, 145)
 TEXT_TIMES_UP_COLOR = (255, 0, 0)
 TOTAL_TIME_COLOR = (183, 183, 255)
 BACKGROUND_COLOR = (0, 0, 0)
+HELP_COLOR = TIMER_COLOR
 WINDOW_SCALE = 1.2
 POSITIONS = [(-5, -5), (5, 5), (5, -5), (-5, 5)]
 INITIAL_SIZE = (180, 70)
@@ -259,8 +260,8 @@ def main():
             screen.blit(t, t.get_rect(center=total_time_rect.center))
 
         if show_help:
-            screen.fill((0, 0, 0, 200))
-            t = text(HELP, screen.get_size(), (255, 255, 255), big=False)
+            screen.fill(BACKGROUND_COLOR)
+            t = text(HELP, screen.get_size(), HELP_COLOR, big=False)
             screen.blit(t, t.get_rect(center=screen.get_rect().center))
 
         # Ring the bell if the time is up.
