@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pucoti"
-version = "0.1.1"
+version = "0.1.3"
 description = "A Purposeful Countdown Timer"
 authors = ["ddorn <diego.dorn@free.fr>"]
 readme = "README.md"
@@ -9,7 +9,8 @@ homepage = "https://github.com/ddorn/pucoti"
 repository = "https://github.com/ddorn/pucoti"
 keywords = ["timer", "countdown", "pygame"]
 include = [
-    "./bell.mp3"
+    "./bell.mp3",
+    "./Wellbutrin.ttf",
 ]
 
 [tool.poetry.scripts]

@@ -40,7 +40,9 @@ from pygame.locals import *
 import pygame._sdl2 as sdl2
 
 
-BELL = Path("./bell.mp3")
+BELL = Path(__file__).parent / "bell.mp3"
+BIG_FONT = Path(__file__).parent / "Wellbutrin.ttf"
+SMALL_FONT = BIG_FONT
 RING_INTERVAL = 20
 PURPOSE_COLOR = (183, 255, 183)
 TIMER_COLOR = (255, 224, 145)
@@ -86,7 +88,7 @@ def fmt_time(seconds):
 
 @lru_cache(maxsize=40)
 def font(size: int, big: bool = True):
-    name = "./Wellbutrin.ttf" if big else "./Wellbutrin.ttf"
+    name = BIG_FONT if big else SMALL_FONT
     f = pygame.font.Font(name, size)
     # f.align = FONT_CENTER
     return f
