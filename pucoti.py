@@ -32,6 +32,8 @@ import re
 import typer
 from typer import Argument, Option
 from enum import Enum
+import random
+
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 os.environ["SDL_VIDEODRIVER"] = "x11"
@@ -48,21 +50,19 @@ FONT = BIG_FONT
 WINDOW_SCALE = 1.2
 POSITIONS = [(-5, -5), (5, 5), (5, -5), (-5, 5)]
 SHORTCUTS = """
-J/K: -/+ 1 minute
+J K: -/+ 1 minute
 R: reset timer
 RETURN: enter purpose
 L: list purpose history
 T: toggle total time
 P: reposition window
--/=: (in/de)crease window size
-H/?: show this help
+- +: (in/de)crease window size
+H ?: show this help
 """.strip()
 HELP = f"""
 PUCOTI
 
 {SHORTCUTS}
-
-Press any key to dismiss this message.
 """.strip()
 
 
@@ -77,15 +77,22 @@ def fmt_time(seconds):
         return "%02d:%02d" % (minutes, seconds)
 
 
+def color_from_name(name: str) -> tuple[int, int, int]:
+    instance = random.Random(name)
+    return instance.randint(0, 255), instance.randint(0, 255), instance.randint(0, 255)
+
+
 class DFont:
     def __init__(self, path: Path):
         self.path = path
-        self.by_size = {}
+        self.by_size: dict[tuple, pygame.Font] = {}
 
-    def get_font(self, size: int) -> pygame.font.Font:
-        if size not in self.by_size:
-            self.by_size[size] = pygame.font.Font(self.path, size)
-        return self.by_size[size]
+    def get_font(self, size: int, align: int = pg.FONT_LEFT) -> pygame.Font:
+        key = size, align
+        if key not in self.by_size:
+            self.by_size[key] = pygame.Font(self.path, size)
+            self.by_size[key].align = align
+        return self.by_size[key]
 
     def render(
         self,
@@ -93,6 +100,7 @@ class DFont:
         size: int | tuple[int, int],
         color: tuple,
         monospaced_time: bool = False,
+        align: int = pg.FONT_LEFT,
     ):
         if not isinstance(size, int):
             if monospaced_time:
@@ -102,13 +110,15 @@ class DFont:
             else:
                 size = self.auto_size(text, size)
 
-        font = self.get_font(size)
+        font = self.get_font(size, align)
 
         sizing = self.tight_size_with_newlines(text, size)
 
         if not monospaced_time:
             surf = font.render(text, True, color)
-            surf = surf.subsurface((0, -sizing.y_offset, surf.get_width(), sizing.height))
+            surf = surf.subsurface(
+                (0, -sizing.y_offset, surf.get_width(), min(sizing.height, surf.get_height()))
+            )
             return surf
 
         else:
@@ -294,7 +304,10 @@ class Scene(Enum):
 app = typer.Typer(add_completion=False)
 
 
-@app.command()
+@app.command(
+    help="Stay on task with PUCOTI, a countdown timer built for simplicity and purpose.\n\nGUI Shortcuts:\n\n"
+    + SHORTCUTS.replace("\n", "\n\n")
+)
 def main(
     # fmt: off
     initial_timer: Annotated[str, Argument(help="The initial timer duration.")] = "5m",
@@ -313,11 +326,6 @@ def main(
     history_file: Annotated[Path, Option(help="Path to the file where the purpose history is stored.")] = Path("~/.pucoti_history"),
     # fmt: on
 ) -> None:
-    """
-    Stay on task with PUCOTI, a countdown timer built for simplicity and purpose.
-
-    Help is available by pressing h or ?.
-    """
 
     history_file = history_file.expanduser()
     history_file.parent.mkdir(parents=True, exist_ok=True)
@@ -376,7 +384,7 @@ def main(
                     timer = initial_duration + (time() - start) + 1
                 elif event.key == pg.K_MINUS:
                     window.size = (window.size[0] / WINDOW_SCALE, window.size[1] / WINDOW_SCALE)
-                elif event.key == pg.K_EQUALS:
+                elif event.key == pg.K_PLUS or event.key == pg.K_EQUALS:
                     window.size = (window.size[0] * WINDOW_SCALE, window.size[1] * WINDOW_SCALE)
                 elif event.key == pg.K_p:
                     position = (position + 1) % len(POSITIONS)
@@ -431,8 +439,37 @@ def main(
 
         if help_rect := layout.get("help"):
             screen.fill(background_color)
-            t = normal_font.render(HELP, help_rect.size, timer_color)
-            screen.blit(t, t.get_rect(center=help_rect.center))
+            title = "PICOTI Bindings\n\n"
+            spacing_text = "__"
+            keys, descriptions = zip(*[line.split(": ") for line in SHORTCUTS.split("\n")])
+            # Since we have two columns, we need them to fit the longest key and description.
+            # So we prentend the text is the longest possible for each line
+            longest_key = max(keys, key=len)
+            longest_desc = max(descriptions, key=len)
+            dummy_long_text = longest_key + spacing_text + longest_desc
+
+            text_for_sizing = title + "\n".join([dummy_long_text] * len(keys))
+            font_size = normal_font.auto_size(text_for_sizing, help_rect.size)
+            centered_rect = normal_font.render(text_for_sizing, font_size, timer_color).get_rect(
+                center=help_rect.center
+            )
+            # Draw title
+            t = normal_font.render(title, font_size, timer_color)
+            r = screen.blit(t, t.get_rect(midtop=centered_rect.midtop))
+            # Draw shortcuts: two columns (right-aligned, left-aligned)
+            keys = normal_font.render(
+                "\n".join(keys), font_size, purpose_color, align=pg.FONT_RIGHT
+            )
+            descriptions = normal_font.render("\n".join(descriptions), font_size, timer_color)
+            left_column_end = centered_rect.left + keys.get_width()
+            middle_space = normal_font.get_font(font_size).size(spacing_text)[0]
+            screen.blit(keys, keys.get_rect(bottomright=(left_column_end, centered_rect.bottom)))
+            screen.blit(
+                descriptions,
+                descriptions.get_rect(
+                    bottomleft=(left_column_end + middle_space, centered_rect.bottom)
+                ),
+            )
 
         if purpose_history_rect := layout.get("purpose_history"):
             screen.fill(background_color)
@@ -440,10 +477,16 @@ def main(
             t = normal_font.render("HISTORY\n" + t, purpose_history_rect.size, purpose_color)
             screen.blit(t, t.get_rect(center=purpose_history_rect.center))
 
-        # If \ is pressed, show the layout rects
+        # If \ is pressed, show the rects in locals()
         if pygame.key.get_pressed()[pg.K_BACKSLASH]:
-            for rect in layout.values():
-                pygame.draw.rect(screen, (255, 0, 0), rect, 1)
+            debug_font = normal_font.get_font(20)
+            for name, rect in locals().items():
+                if isinstance(rect, pygame.Rect):
+                    color = color_from_name(name)
+                    pygame.draw.rect(screen, color, rect, 1)
+                    # and its name
+                    t = debug_font.render(name, True, (255, 255, 255))
+                    screen.blit(t, rect.topleft)
 
         # Ring the bell if the time is up.
         if remaining < 0 and time() - last_rung > ring_every and nb_rings != ring_count:
