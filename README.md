@@ -2,7 +2,7 @@
 
 **A Purposeful Countdown Timer**
 
-PUCOTI is a simple, honest countdown timer with a few useful features:
+Stay on task with PUCOTI, a countdown timer built for simplicity and purpose.
 
 ### Features:
 - **Countdown**: Counts down to zero (and can go below zero).
