@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from dataclasses import dataclass
 from functools import lru_cache
 import os
 import subprocess
@@ -9,6 +10,7 @@ from typing import Annotated
 from pathlib import Path
 import re
 import typer
+from enum import Enum
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 
@@ -30,14 +32,15 @@ POSITIONS = [(-5, -5), (5, 5), (5, -5), (-5, 5)]
 INITIAL_SIZE = (180, 70)
 
 SHORTCUTS = """
-j/k: -/+ 1 minute
-r: reset timer
-p: reposition window
+J/K: -/+ 1 minute
+R: reset timer
 RETURN: enter purpose
+L: list purpose history
+P: reposition window
 -/=: (in/de)crease window size
-h/?: show this help
+H/?: show this help
 """.strip()
-HELP = """
+HELP = f"""
 DTimer
 
 {SHORTCUTS}
@@ -64,7 +67,7 @@ def fmt_time(seconds):
 def font(size: int, big: bool = True):
     name = "./Wellbutrin.ttf" if big else "./Wellbutrin.ttf"
     f = pygame.font.Font(name, size)
-    f.align = FONT_CENTER
+    # f.align = FONT_CENTER
     return f
 
 
@@ -167,20 +170,6 @@ def vsplit(rect, *ratios):
     ]
 
 
-def mk_layout(screen_size: tuple[int, int]) -> dict[str, pygame.Rect]:
-    width, height = screen_size
-    screen = pygame.Rect((0, 0), screen_size)
-
-    if height < 60:
-        return {"time": screen}
-    elif height < 120:
-        purpose, time = vsplit(screen, 1, 2)
-        return {"purpose": purpose, "time": time}
-    else:
-        purpose, time, bottom = vsplit(screen, 1, 2, 1)
-        return {"purpose": purpose, "time": time, "total_time": bottom}
-
-
 def human_duration(*duration: str) -> int:
     """Convert a human duration to seconds."""
 
@@ -194,6 +183,39 @@ def human_duration(*duration: str) -> int:
             raise ValueError(f"Invalid duration part: {part}")
 
     return total
+
+
+@dataclass
+class Purpose:
+    text: str
+    timestamp: float
+
+
+class Scene(Enum):
+    MAIN = "main"
+    HELP = "help"
+    PURPOSE_HISTORY = "purpose_history"
+    ENTERING_PURPOSE = "entering_purpose"
+
+    def mk_layout(self, screen_size: tuple[int, int]) -> dict[str, pygame.Rect]:
+        width, height = screen_size
+        screen = pygame.Rect((0, 0), screen_size)
+
+        if self == Scene.HELP:
+            return {"help": screen}
+        elif self == Scene.PURPOSE_HISTORY:
+            return {"purpose_history": screen}
+        elif self in (Scene.MAIN, Scene.ENTERING_PURPOSE):
+            if height < 60:
+                return {"time": screen}
+            elif height < 120:
+                purpose, time = vsplit(screen, 1, 2)
+                return {"purpose": purpose, "time": time}
+            else:
+                purpose, time, bottom = vsplit(screen, 1, 2, 1)
+                return {"purpose": purpose, "time": time, "total_time": bottom}
+        else:
+            raise ValueError(f"Invalid scene: {self}")
 
 
 app = typer.Typer(add_completion=False)
@@ -228,26 +250,29 @@ def main(initial_timer: list[str]):
     last_rung = 0
 
     purpose = ""
-    entering_purpose = False
+    purpose_history = []
 
-    show_help = False
-    layout = mk_layout(window.size)
+    last_scene = None
+    scene = Scene.MAIN
+    layout = scene.mk_layout(window.size)
 
     while True:
+        last_scene = scene
         for event in pygame.event.get():
             if event.type == QUIT:
                 sys.exit()
             elif event.type == VIDEORESIZE:
-                layout = mk_layout(window.size)
+                layout = scene.mk_layout(window.size)
             elif event.type == KEYDOWN:
-                show_help = False
-                if event.key == K_RETURN:
-                    entering_purpose = not entering_purpose
-                elif entering_purpose:
+                if scene in (Scene.HELP, Scene.PURPOSE_HISTORY):
+                    scene = Scene.MAIN
+                    layout = scene.mk_layout(window.size)
+                if scene == Scene.ENTERING_PURPOSE:
                     if event.key == K_BACKSPACE:
                         purpose = purpose[:-1]
-                    elif event.key == K_ESCAPE:
-                        entering_purpose = False
+                    elif event.key in (K_RETURN, K_KP_ENTER, K_ESCAPE):
+                        scene = Scene.MAIN
+                        layout = scene.mk_layout(window.size)
                     elif event.unicode:
                         purpose += event.unicode
                 elif event.key == K_j:
@@ -259,15 +284,26 @@ def main(initial_timer: list[str]):
                     timer = initial_duration + (time() - start) + 1
                 elif event.key == K_MINUS:
                     window.size = (window.size[0] / WINDOW_SCALE, window.size[1] / WINDOW_SCALE)
-                    layout = mk_layout(window.size)
+                    layout = scene.mk_layout(window.size)
                 elif event.key == K_EQUALS:
                     window.size = (window.size[0] * WINDOW_SCALE, window.size[1] * WINDOW_SCALE)
-                    layout = mk_layout(window.size)
+                    layout = scene.mk_layout(window.size)
                 elif event.key == K_p:
                     position = (position + 1) % len(POSITIONS)
                     place_window(window, *POSITIONS[position])
+                elif event.key in (K_RETURN, K_KP_ENTER):
+                    scene = Scene.ENTERING_PURPOSE
+                    layout = scene.mk_layout(window.size)
                 elif event.key in (K_h, K_QUESTION):
-                    show_help = not show_help
+                    scene = Scene.HELP
+                    layout = scene.mk_layout(window.size)
+                elif event.key == K_l:
+                    scene = Scene.PURPOSE_HISTORY
+                    layout = scene.mk_layout(window.size)
+
+        if last_scene == Scene.ENTERING_PURPOSE and scene != last_scene:
+            if purpose and (not purpose_history or purpose != purpose_history[-1].text):
+                purpose_history.append(Purpose(purpose, time()))
 
         screen.fill(BACKGROUND_COLOR)
 
@@ -275,7 +311,7 @@ def main(initial_timer: list[str]):
         if purpose_rect := layout.get("purpose"):
             t = text(purpose, purpose_rect.size, PURPOSE_COLOR)
             r = screen.blit(t, t.get_rect(center=purpose_rect.center))
-            if entering_purpose and (time() % 1) < 0.7:
+            if scene == Scene.ENTERING_PURPOSE and (time() % 1) < 0.7:
                 if r.height == 0:
                     r.height = purpose_rect.height
                 if r.right >= purpose_rect.right:
@@ -298,10 +334,16 @@ def main(initial_timer: list[str]):
             )
             screen.blit(t, t.get_rect(center=total_time_rect.center))
 
-        if show_help:
+        if help_rect := layout.get("help"):
             screen.fill(BACKGROUND_COLOR)
-            t = text(HELP, screen.get_size(), HELP_COLOR, big=False)
-            screen.blit(t, t.get_rect(center=screen.get_rect().center))
+            t = text(HELP, help_rect.size, HELP_COLOR, big=False)
+            screen.blit(t, t.get_rect(center=help_rect.center))
+
+        if purpose_history_rect := layout.get("purpose_history"):
+            screen.fill(BACKGROUND_COLOR)
+            t = "\n".join(f"({fmt_time(p.timestamp - start)}) {p.text}" for p in purpose_history)
+            t = text("HISTORY\n" + t, purpose_history_rect.size, PURPOSE_COLOR, big=False)
+            screen.blit(t, t.get_rect(center=purpose_history_rect.center))
 
         # Ring the bell if the time is up.
         if remaining < 0 and time() - last_rung > RING_INTERVAL:
