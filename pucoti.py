@@ -232,7 +232,7 @@ def main(
     initial_timer: list[str],
     bell: Annotated[Path, "Path to the bell sound file."] = BELL,
     ring_every: int = 20,
-    # ring_count: int = -1,
+    ring_count: int = -1,
     font: Annotated[Path, "Path to the font for all the text."] = FONT,
     background_color: tuple[int, int, int] = (0, 0, 0),
     timer_color: tuple[int, int, int] = (255, 224, 145),
@@ -275,6 +275,7 @@ def main(
     start = time()
     timer = initial_duration
     last_rung = 0
+    nb_rings = 0
 
     purpose = ""
     purpose_history = []
@@ -375,9 +376,12 @@ def main(
             screen.blit(t, t.get_rect(center=purpose_history_rect.center))
 
         # Ring the bell if the time is up.
-        if remaining < 0 and time() - last_rung > ring_every:
+        if remaining < 0 and time() - last_rung > ring_every and nb_rings != ring_count:
             play(bell)
             last_rung = time()
+            nb_rings += 1
+        elif remaining > 0:
+            nb_rings = 0
 
         window.flip()
         clock.tick(60)
