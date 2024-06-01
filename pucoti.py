@@ -208,7 +208,7 @@ class Scene(Enum):
     PURPOSE_HISTORY = "purpose_history"
     ENTERING_PURPOSE = "entering_purpose"
 
-    def mk_layout(self, screen_size: tuple[int, int]) -> dict[str, pygame.Rect]:
+    def mk_layout(self, screen_size: tuple[int, int], has_purpose: bool) -> dict[str, pygame.Rect]:
         width, height = screen_size
         screen = pygame.Rect((0, 0), screen_size)
 
@@ -216,13 +216,27 @@ class Scene(Enum):
             return {"help": screen}
         elif self == Scene.PURPOSE_HISTORY:
             return {"purpose_history": screen}
-        elif self in (Scene.MAIN, Scene.ENTERING_PURPOSE):
+        elif self == Scene.ENTERING_PURPOSE:
+            if height < 60:
+                return {"purpose": screen}
+            elif height < 120:
+                purpose, time = vsplit(screen, 2, 1)
+                return {"purpose": purpose, "time": time}
+            else:
+                purpose, time, bottom = vsplit(screen, 2, 1, 1)
+                return {"purpose": purpose, "time": time, "total_time": bottom}
+        elif self == Scene.MAIN:
             if height < 60:
                 return {"time": screen}
             elif height < 120:
+                if not has_purpose:
+                    return {"time": screen}
                 purpose, time = vsplit(screen, 1, 2)
                 return {"purpose": purpose, "time": time}
             else:
+                if not has_purpose:
+                    time, bottom = vsplit(screen, 3, 1)
+                    return {"time": time, "total_time": bottom}
                 purpose, time, bottom = vsplit(screen, 1, 2, 1)
                 return {"purpose": purpose, "time": time, "total_time": bottom}
         else:
@@ -287,25 +301,20 @@ def main(
 
     last_scene = None
     scene = Scene.MAIN
-    layout = scene.mk_layout(window.size)
 
     while True:
         last_scene = scene
         for event in pygame.event.get():
             if event.type == QUIT:
                 sys.exit()
-            elif event.type == VIDEORESIZE:
-                layout = scene.mk_layout(window.size)
             elif event.type == KEYDOWN:
                 if scene in (Scene.HELP, Scene.PURPOSE_HISTORY):
                     scene = Scene.MAIN
-                    layout = scene.mk_layout(window.size)
                 if scene == Scene.ENTERING_PURPOSE:
                     if event.key == K_BACKSPACE:
                         purpose = purpose[:-1]
                     elif event.key in (K_RETURN, K_KP_ENTER, K_ESCAPE):
                         scene = Scene.MAIN
-                        layout = scene.mk_layout(window.size)
                     elif event.unicode:
                         purpose += event.unicode
                 elif event.key == K_j:
@@ -317,28 +326,25 @@ def main(
                     timer = initial_duration + (time() - start) + 1
                 elif event.key == K_MINUS:
                     window.size = (window.size[0] / WINDOW_SCALE, window.size[1] / WINDOW_SCALE)
-                    layout = scene.mk_layout(window.size)
                 elif event.key == K_EQUALS:
                     window.size = (window.size[0] * WINDOW_SCALE, window.size[1] * WINDOW_SCALE)
-                    layout = scene.mk_layout(window.size)
                 elif event.key == K_p:
                     position = (position + 1) % len(POSITIONS)
                     place_window(window, *POSITIONS[position])
                 elif event.key in (K_RETURN, K_KP_ENTER):
                     scene = Scene.ENTERING_PURPOSE
-                    layout = scene.mk_layout(window.size)
                 elif event.key in (K_h, K_QUESTION):
                     scene = Scene.HELP
-                    layout = scene.mk_layout(window.size)
                 elif event.key == K_l:
                     scene = Scene.PURPOSE_HISTORY
-                    layout = scene.mk_layout(window.size)
 
         if last_scene == Scene.ENTERING_PURPOSE and scene != last_scene:
             if purpose and (not purpose_history or purpose != purpose_history[-1].text):
                 purpose_history.append(Purpose(purpose, time()))
                 with history_file.open("a") as f:
                     f.write(json.dumps(purpose_history[-1].__dict__) + "\n")
+
+        layout = scene.mk_layout(window.size, bool(purpose))
 
         screen.fill(background_color)
 
