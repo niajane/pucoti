@@ -494,6 +494,10 @@ class Scene(Enum):
 app = typer.Typer(add_completion=False)
 
 
+def StyleOpt(help=None, **kwargs):
+    return Option(help=help, rich_help_panel="Style", **kwargs)
+
+
 @app.command(
     help="Stay on task with PUCOTI, a countdown timer built for simplicity and purpose.\n\nGUI Shortcuts:\n\n"
     + SHORTCUTS.replace("\n", "\n\n")
@@ -504,13 +508,13 @@ def main(
     bell: Annotated[Path, Option(help="Path to the bell sound file.")] = BELL,
     ring_every: Annotated[int, Option(help="The time between rings, in seconds.")] = 20,
     ring_count: Annotated[int, Option(help="Number of rings played when the time is up.")] = -1,
-    timer_font: Annotated[Path, Option(help="Path to the font for the timer.")] = BIG_FONT,
-    font: Annotated[Path, Option(help="Path to the font for all other text.")] = FONT,
-    background_color: tuple[int, int, int] = (0, 0, 0),
-    timer_color: tuple[int, int, int] = (255, 224, 145),
-    timer_up_color: tuple[int, int, int] = (255, 0, 0),
-    purpose_color: tuple[int, int, int] = (183, 255, 183),
-    total_time_color: tuple[int, int, int] = (183, 183, 255),
+    timer_font: Annotated[Path, StyleOpt("Path to the font for the timer.")] = BIG_FONT,
+    font: Annotated[Path, StyleOpt("Path to the font for all other text.")] = FONT,
+    background_color: Annotated[tuple[int, int, int], StyleOpt()] = (0, 0, 0),
+    timer_color: Annotated[tuple[int, int, int], StyleOpt()] = (255, 224, 145),
+    timer_up_color: Annotated[tuple[int, int, int], StyleOpt()] = (255, 0, 0),
+    purpose_color: Annotated[tuple[int, int, int], StyleOpt()] = (183, 255, 183),
+    total_time_color: Annotated[tuple[int, int, int], StyleOpt()] = (183, 183, 255),
     window_position: tuple[int, int] = (-5, -5),
     window_size: tuple[int, int] = (180, 70),
     history_file: Annotated[Path, Option(help="Path to the file where the purpose history is stored.")] = Path("~/.pucoti_history"),
