@@ -555,7 +555,7 @@ def main(
     place_window(window, *window_position)
 
     initial_duration = human_duration(initial_timer)
-    start = time()
+    start = round(time())
     timer = initial_duration
     last_rung = 0
     nb_rings = 0
@@ -566,7 +566,7 @@ def main(
         if line.strip()
     ]
     purpose = ""
-    purpose_start_time = time()
+    purpose_start_time = int(time())
     history_lines = 10
     history_scroll = 0  # From the bottom
     show_relative_time = True
@@ -614,7 +614,7 @@ def main(
                     timer += 60
                 elif event.key == pg.K_r:
                     # +1 to more likely show visually round time -> more satisfying
-                    timer = initial_duration + (time() - start) + 1
+                    timer = initial_duration + (round(time()) - start) + 1
                 elif event.key == pg.K_MINUS:
                     window.size = (window.size[0] / WINDOW_SCALE, window.size[1] / WINDOW_SCALE)
                 elif event.key == pg.K_PLUS or event.key == pg.K_EQUALS:
@@ -633,7 +633,7 @@ def main(
 
         if last_scene == Scene.ENTERING_PURPOSE and scene != last_scene:
             if not purpose_history or purpose != purpose_history[-1].text:
-                purpose_start_time = time()
+                purpose_start_time = round(time())
                 purpose_history.append(Purpose(purpose))
                 purpose_history[-1].add_to_history(history_file)
 
