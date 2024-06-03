@@ -410,15 +410,21 @@ def play(sound):
     pygame.mixer.music.play()
 
 
-def vsplit(rect, *ratios):
+def split_rect(rect, *ratios, horizontal: bool = False):
     """Split a rect vertically in ratios."""
     total_ratio = sum(ratios)
     ratios = [r / total_ratio for r in ratios]
     cummulative_ratios = [0] + [sum(ratios[:i]) for i in range(1, len(ratios) + 1)]
-    ys = [int(rect.height * r) for r in cummulative_ratios]
-    return [
-        pygame.Rect(rect.left, ys[i], rect.width, ys[i + 1] - ys[i]) for i in range(len(ratios))
-    ]
+    if horizontal:
+        xs = [rect.left + int(rect.width * r) for r in cummulative_ratios]
+        return [
+            pygame.Rect(xs[i], rect.top, xs[i + 1] - xs[i], rect.height) for i in range(len(ratios))
+        ]
+    else:
+        ys = [rect.top + int(rect.height * r) for r in cummulative_ratios]
+        return [
+            pygame.Rect(rect.left, ys[i], rect.width, ys[i + 1] - ys[i]) for i in range(len(ratios))
+        ]
 
 
 def human_duration(duration: str) -> int:
@@ -471,14 +477,14 @@ class Scene(Enum):
             elif height < 120:
                 layout = {"purpose": 2, "time": 1}
             else:
-                layout = {"purpose": 2, "time": 1, "total_time": 0.5}
+                layout = {"purpose": 2, "time": 1, "totals": 0.5}
         elif self == Scene.MAIN:
             if height < 60:
                 layout = {"time": 1}
             elif height < 120:
                 layout = {"purpose": 1, "time": 2}
             else:
-                layout = {"purpose": 1, "time": 2, "total_time": 1}
+                layout = {"purpose": 1, "time": 2, "totals": 1}
 
             if not has_purpose:
                 layout["time"] += layout.pop("purpose", 0)
@@ -486,9 +492,17 @@ class Scene(Enum):
             raise ValueError(f"Invalid scene: {self}")
 
         if no_total:
-            layout.pop("total_time", None)
+            layout.pop("totals", None)
 
-        return {k: rect for k, rect in zip(layout.keys(), vsplit(screen, *layout.values()))}
+        rects = {k: rect for k, rect in zip(layout.keys(), split_rect(screen, *layout.values()))}
+
+        # Bottom has horizontal layout with [total_time | purpose_time]
+        if total_time_rect := rects.pop("totals", None):
+            rects["total_time"], _, rects["purpose_time"] = split_rect(
+                total_time_rect, 1, 0.2, 1, horizontal=True
+            )
+
+        return rects
 
 
 app = typer.Typer(add_completion=False)
@@ -551,7 +565,8 @@ def main(
         for line in history_file.read_text().splitlines()
         if line.strip()
     ]
-    purpose = purpose_history[-1].text if purpose_history else ""
+    purpose = ""
+    purpose_start_time = time()
     history_lines = 10
     history_scroll = 0  # From the bottom
     show_relative_time = True
@@ -618,6 +633,7 @@ def main(
 
         if last_scene == Scene.ENTERING_PURPOSE and scene != last_scene:
             if not purpose_history or purpose != purpose_history[-1].text:
+                purpose_start_time = time()
                 purpose_history.append(Purpose(purpose))
                 purpose_history[-1].add_to_history(history_file)
 
@@ -653,6 +669,15 @@ def main(
                 monospaced_time=True,
             )
             screen.blit(t, t.get_rect(center=total_time_rect.center))
+
+        if purpose_time_rect := layout.get("purpose_time"):
+            t = normal_font.render(
+                fmt_duration(time() - purpose_start_time),
+                purpose_time_rect.size,
+                purpose_color,
+                monospaced_time=True,
+            )
+            screen.blit(t, t.get_rect(midright=purpose_time_rect.midright))
 
         if help_rect := layout.get("help"):
             title = "PICOTI Bindings"
