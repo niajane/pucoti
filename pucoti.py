@@ -613,8 +613,8 @@ def main(
                 elif event.key == pg.K_k:
                     timer += 60
                 elif event.key == pg.K_r:
-                    # +1 to more likely show visually round time -> more satisfying
-                    timer = initial_duration + (round(time()) - start) + 1
+                    # +0.5 to show visually round time -> more satisfying
+                    timer = initial_duration + (round(time() + 0.5) - start)
                 elif event.key == pg.K_MINUS:
                     window.size = (window.size[0] / WINDOW_SCALE, window.size[1] / WINDOW_SCALE)
                 elif event.key == pg.K_PLUS or event.key == pg.K_EQUALS:
