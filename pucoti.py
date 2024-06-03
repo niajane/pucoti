@@ -474,14 +474,14 @@ class Scene(Enum):
         elif self == Scene.ENTERING_PURPOSE:
             if height < 60:
                 layout = {"purpose": 1}
-            elif height < 120:
+            elif height < 80:
                 layout = {"purpose": 2, "time": 1}
             else:
                 layout = {"purpose": 2, "time": 1, "totals": 0.5}
         elif self == Scene.MAIN:
             if height < 60:
                 layout = {"time": 1}
-            elif height < 120:
+            elif height < 80:
                 layout = {"purpose": 1, "time": 2}
             else:
                 layout = {"purpose": 1, "time": 2, "totals": 1}
@@ -530,7 +530,7 @@ def main(
     purpose_color: Annotated[tuple[int, int, int], StyleOpt()] = (183, 255, 183),
     total_time_color: Annotated[tuple[int, int, int], StyleOpt()] = (183, 183, 255),
     window_position: tuple[int, int] = (-5, -5),
-    window_size: tuple[int, int] = (180, 70),
+    window_size: tuple[int, int] = (220, 80),
     history_file: Annotated[Path, Option(help="Path to the file where the purpose history is stored.")] = Path("~/.pucoti_history"),
     # fmt: on
 ) -> None:
@@ -668,7 +668,7 @@ def main(
                 total_time_color,
                 monospaced_time=True,
             )
-            screen.blit(t, t.get_rect(center=total_time_rect.center))
+            screen.blit(t, t.get_rect(midleft=total_time_rect.midleft))
 
         if purpose_time_rect := layout.get("purpose_time"):
             t = normal_font.render(
