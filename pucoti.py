@@ -399,7 +399,13 @@ def place_window(window, x: int, y: int):
     window.position = (x, y)
 
     try:
-        cmd = f'swaymsg "[title=\\"PUCOTI\\"] move absolute position {x} {y}"'
+        cmd = f'swaymsg "[title=\\"PUCOTI\\"] floating enable, move absolute position {x} {y}"'
+        # Thanks gpt4!
+        cmd = (
+            """swaymsg -t get_outputs | jq -r \'.[] | select(.focused) | .rect | "\\(.x + %d) \\(.y + %d)"\' | xargs -I {} swaymsg \'[title="PUCOTI"] floating enable, move absolute position {}\'"""
+            % (x, y)
+        )
+        print("Running:", cmd)
         subprocess.check_output(cmd, shell=True)
     except subprocess.CalledProcessError as e:
         print(e.output)
