@@ -430,6 +430,9 @@ def split_rect(rect, *ratios, horizontal: bool = False):
 def human_duration(duration: str) -> int:
     """Convert a human duration to seconds."""
 
+    if duration.startswith("-"):
+        return -human_duration(duration[1:])
+
     # Parse the duration.
     total = 0
     multiplier = {"s": 1, "m": 60, "h": 3600, "d": 86400}
@@ -505,6 +508,29 @@ class Scene(Enum):
         return rects
 
 
+class CountdownCallback:
+    """Call a command once the timer goes below a specific time."""
+
+    def __init__(self, time_and_command: str) -> None:
+        time, _, command = time_and_command.partition(":")
+        self.command = command
+        if isinstance(time, str):
+            self.time = human_duration(time)
+        else:
+            self.time = time
+        self.executed = False
+
+    def update(self, current_time: float):
+        """Call the command if needed. Current time is the number of seconds on screen."""
+        if current_time >= self.time:
+            self.executed = False
+        elif not self.executed:
+            self.executed = True
+            # Asynchronously run the command.
+            print(f"Running: {self.command}")
+            subprocess.Popen(self.command, shell=True)
+
+
 app = typer.Typer(add_completion=False)
 
 
@@ -522,6 +548,7 @@ def main(
     bell: Annotated[Path, Option(help="Path to the bell sound file.")] = BELL,
     ring_every: Annotated[int, Option(help="The time between rings, in seconds.")] = 20,
     ring_count: Annotated[int, Option(help="Number of rings played when the time is up.")] = -1,
+    run_at: Annotated[list[str], Option(help="Run a command at a specific time. Example: --run-at '-1m 30s:notify-send \"Time was up 1m30s ago!\"'")] = [],
     timer_font: Annotated[Path, StyleOpt("Path to the font for the timer.")] = BIG_FONT,
     font: Annotated[Path, StyleOpt("Path to the font for all other text.")] = FONT,
     background_color: Annotated[tuple[int, int, int], StyleOpt()] = (0, 0, 0),
@@ -559,6 +586,7 @@ def main(
     timer = initial_duration
     last_rung = 0
     nb_rings = 0
+    callbacks = [CountdownCallback(time_and_command) for time_and_command in run_at]
 
     purpose_history = [
         Purpose(**json.loads(line))
@@ -741,8 +769,12 @@ def main(
         elif remaining > 0:
             nb_rings = 0
 
+        # And execute the callbacks.
+        for callback in callbacks:
+            callback.update(timer - (time() - start))
+
         window.flip()
-        clock.tick(60)
+        clock.tick(30)
 
 
 if __name__ == "__main__":
