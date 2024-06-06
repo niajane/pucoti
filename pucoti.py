@@ -554,6 +554,7 @@ def main(
     bell: Annotated[Path, Option(help="Path to the bell sound file.")] = BELL,
     ring_every: Annotated[int, Option(help="The time between rings, in seconds.")] = 20,
     ring_count: Annotated[int, Option(help="Number of rings played when the time is up.")] = -1,
+    restart: Annotated[bool, Option(help="Restart the timer when it reaches 0.")] = False,
     run_at: Annotated[list[str], Option(help="Run a command at a specific time. Example: --run-at '-1m 30s:notify-send \"Time was up 1m30s ago!\"'")] = [],
     timer_font: Annotated[Path, StyleOpt("Path to the font for the timer.")] = BIG_FONT,
     font: Annotated[Path, StyleOpt("Path to the font for all other text.")] = FONT,
@@ -772,6 +773,9 @@ def main(
             last_rung = time()
             nb_rings += 1
             play(bell)
+            if restart:
+                timer = initial_duration + (round(time() + 0.5) - start)
+
         elif remaining > 0:
             nb_rings = 0
 
