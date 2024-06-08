@@ -39,7 +39,7 @@ import atexit
 
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
-if os.environ["SDL_VIDEODRIVER"] == "wayland":
+if os.environ.get("SDL_VIDEODRIVER") == "wayland":
     os.environ["SDL_VIDEODRIVER"] = "x11"
 
 import pygame
