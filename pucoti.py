@@ -572,6 +572,7 @@ def main(
 
     history_file = history_file.expanduser()
     history_file.parent.mkdir(parents=True, exist_ok=True)
+    history_file.touch(exist_ok=True)
 
     pygame.init()
     pygame.mixer.init()
