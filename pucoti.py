@@ -56,6 +56,7 @@ WINDOW_SCALE = 1.2
 POSITIONS = [(-5, -5), (5, 5), (5, -5), (-5, 5)]
 SHORTCUTS = """
 J K: -/+ 1 minute
+U L: -/+ 5 minutes
 R: reset timer
 RETURN: enter purpose
 L: list purpose history
@@ -650,6 +651,10 @@ def main(
                     timer -= 60
                 elif event.key == pg.K_k:
                     timer += 60
+                elif event.key == pg.K_u:
+                    timer -= 60*5
+                elif event.key == pg.K_l:
+                    timer += 60*5
                 elif event.key == pg.K_r:
                     # +0.5 to show visually round time -> more satisfying
                     timer = initial_duration + (round(time() + 0.5) - start)
@@ -718,7 +723,7 @@ def main(
             screen.blit(t, t.get_rect(midright=purpose_time_rect.midright))
 
         if help_rect := layout.get("help"):
-            title = "PICOTI Bindings"
+            title = "PUCOTI Bindings"
             s = normal_font.table(
                 [line.split(": ") for line in SHORTCUTS.split("\n")],  # type: ignore
                 help_rect.size,
