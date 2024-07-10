@@ -31,6 +31,7 @@ from time import time
 from typing import Annotated
 from pathlib import Path
 import re
+import warnings
 import typer
 from typer import Argument, Option
 from enum import Enum
@@ -68,6 +69,9 @@ PUCOTI
 
 {SHORTCUTS}
 """.strip()
+
+# Diegouses sway, and it needs a few tweaks as it's a non-standard window manager.
+RUNS_ON_SWAY = os.environ.get("SWAYSOCK") is not None
 
 
 def fmt_duration(seconds):
@@ -383,10 +387,8 @@ class DFont:
 
 
 def place_window(window, x: int, y: int):
-    """Place the window at the desired position using sway."""
+    """Place the window at the desired position."""
 
-    # size = subprocess.check_output("swaymsg -t get_outputs | jq '.[] | select(.active) | .current_mode.width, .current_mode.height'", shell=True)
-    # size = tuple(map(int, size.split()))
     info = pygame.display.Info()
     size = info.current_w, info.current_h
 
@@ -399,17 +401,16 @@ def place_window(window, x: int, y: int):
     # It works on some platforms.
     window.position = (x, y)
 
-    try:
-        cmd = f'swaymsg "[title=\\"PUCOTI\\"] floating enable, move absolute position {x} {y}"'
-        # Thanks gpt4!
+    if RUNS_ON_SWAY:
+        # Thanks gpt4! This moves the window while keeping it on the same display.
         cmd = (
             """swaymsg -t get_outputs | jq -r \'.[] | select(.focused) | .rect | "\\(.x + %d) \\(.y + %d)"\' | xargs -I {} swaymsg \'[title="PUCOTI"] floating enable, move absolute position {}\'"""
             % (x, y)
         )
-        print("Running:", cmd)
-        subprocess.check_output(cmd, shell=True)
-    except subprocess.CalledProcessError as e:
-        print(e.output)
+        try:
+            subprocess.check_output(cmd, shell=True)
+        except subprocess.CalledProcessError as e:
+            warnings.warn(f"Failed to move window on sway: {e}")
 
 
 def play(sound):
