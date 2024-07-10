@@ -655,8 +655,10 @@ def main(
                     timer = initial_duration + (round(time() + 0.5) - start)
                 elif event.key == pg.K_MINUS:
                     window.size = (window.size[0] / WINDOW_SCALE, window.size[1] / WINDOW_SCALE)
+                    place_window(window, *POSITIONS[position])
                 elif event.key == pg.K_PLUS or event.key == pg.K_EQUALS:
                     window.size = (window.size[0] * WINDOW_SCALE, window.size[1] * WINDOW_SCALE)
+                    place_window(window, *POSITIONS[position])
                 elif event.key == pg.K_p:
                     position = (position + 1) % len(POSITIONS)
                     place_window(window, *POSITIONS[position])
