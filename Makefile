@@ -19,15 +19,13 @@ linux: mkdist
 	@echo -e "$(GREEN)Building for linux...$(END)"
 	poetry run pyinstaller --noconsole --add-data assets/:assets --onefile pucoti.py
 
-# windows: mkdist
-# 	@echo -e "$(GREEN)Building for windows...$(END)"
-# 	WINEDEBUG=-all wine pyinstaller.exe --noconsole --add-data src\\assets\;src\\assets --onefile pucoti.py
+# For this to work on linux, I needed to download the python 32-bit installer and run it with wine
+# Then I had to install the deps (wine pip install .) and pyinstaller (wine pip install pyinstaller)
+# And make windows worked!
 
-check_git_status:
-	@if [ -n "$$(git status --porcelain)" ]; then \
-		echo "Git working directory is not clean. Please commit or stash your changes."; \
-		exit 1; \
-	fi
+windows: mkdist
+	@echo -e "$(GREEN)Building for windows...$(END)"
+	WINEDEBUG=-all wine pyinstaller.exe --noconsole --add-data assets\;assets --onefile pucoti.py
 
 poetry_patch:
 	poetry version patch
@@ -53,13 +51,16 @@ check_git_status:
 		fi; \
 	fi
 
+
+wheel:
+	poetry build
+
+patch: check_git_status poetry_patch commit_version_bump zip linux wheel
+minor: check_git_status poetry_minor commit_version_bump zip linux wheel
+major: check_git_status poetry_major commit_version_bump zip linux wheel
+
 publish:
-	poetry publish --build
-
-patch: check_git_status poetry_patch commit_version_bump zip linux publish
-minor: check_git_status poetry_minor commit_version_bump zip linux publish
-major: check_git_status poetry_major commit_version_bump zip linux publish
-
+	poetry publish
 
 clean:
 	rm -r build
