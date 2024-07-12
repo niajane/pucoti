@@ -388,9 +388,9 @@ class DFont:
         return surf
 
 
-def adjust_window_size(window, scale_factor: float):
+def adjust_window_size(window, window_dimensions_ratio: float, scale_factor: float):
     new_width = window.size[0] * scale_factor
-    new_height = new_width / 2.75
+    new_height = new_width/window_dimensions_ratio
 
     display_info = pygame.display.Info()
     max_width = display_info.current_w
@@ -595,6 +595,7 @@ def main(
     pygame.mixer.init()
     pygame.key.set_repeat(300, 20)
 
+    window_dimensions_ratio = window_size[0] / window_size[1]
     window = sdl2.Window("PUCOTI", window_size, borderless=True, always_on_top=True, resizable=True)
     window.get_surface().fill((0, 0, 0))
     window.flip()
@@ -670,10 +671,10 @@ def main(
                     # +0.5 to show visually round time -> more satisfying
                     timer = initial_duration + (round(time() + 0.5) - start)
                 elif event.key == pg.K_MINUS:
-                    adjust_window_size(window, 1 / WINDOW_SCALE)
+                    adjust_window_size(window, window_dimensions_ratio, 1 / WINDOW_SCALE)
                     place_window(window, *POSITIONS[position])
                 elif event.key == pg.K_PLUS or event.key == pg.K_EQUALS:
-                    adjust_window_size(window, WINDOW_SCALE)
+                    adjust_window_size(window, window_dimensions_ratio, WINDOW_SCALE)
                     place_window(window, *POSITIONS[position])
                 elif event.key == pg.K_p:
                     position = (position + 1) % len(POSITIONS)
