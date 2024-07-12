@@ -390,7 +390,7 @@ class DFont:
 
 def adjust_window_size(window, scale_factor: float):
     new_width = window.size[0] * scale_factor
-    new_height = new_width/2.75
+    new_height = new_width / 2.75
 
     display_info = pygame.display.Info()
     max_width = display_info.current_w
