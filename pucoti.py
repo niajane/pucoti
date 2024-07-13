@@ -38,6 +38,8 @@ from enum import Enum
 import random
 import atexit
 
+from event_key_utils import NUMBER_KEYS, get_number_from_key, shift_is_pressed
+
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 if os.environ.get("SDL_VIDEODRIVER") == "wayland":
@@ -158,6 +160,8 @@ def fmt_time_absoulte(seconds):
 def fmt_time(seconds, relative=True):
     return fmt_time_relative(seconds) if relative else fmt_time_absoulte(seconds)
 
+def round_time_up_to_minute(timer, start):
+    return timer + (round(time() + 0.5) - start)
 
 def shorten(text: str, max_len: int) -> str:
     """Shorten a text to max_len characters, adding ... if necessary."""
@@ -648,16 +652,17 @@ def main(
                     else:
                         scene = Scene.MAIN
                 elif event.key == pg.K_j:
-                    timer -= 60
+                    timer -= 60*5 if shift_is_pressed() else 60                    
                 elif event.key == pg.K_k:
-                    timer += 60
-                elif event.key == pg.K_u:
-                    timer -= 60*5
-                elif event.key == pg.K_l:
-                    timer += 60*5
+                    timer += 60*5 if shift_is_pressed() else 60
+                elif event.key in NUMBER_KEYS:
+                    if shift_is_pressed():
+                        timer = round_time_up_to_minute(60*10*get_number_from_key(event.key), start)
+                    else:
+                        timer = round_time_up_to_minute(60*get_number_from_key(event.key), start)
                 elif event.key == pg.K_r:
                     # +0.5 to show visually round time -> more satisfying
-                    timer = initial_duration + (round(time() + 0.5) - start)
+                    timer = round_time_up_to_minute(initial_duration, start)
                 elif event.key == pg.K_MINUS:
                     window.size = (window.size[0] / WINDOW_SCALE, window.size[1] / WINDOW_SCALE)
                 elif event.key == pg.K_PLUS or event.key == pg.K_EQUALS:
