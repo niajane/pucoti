@@ -15,6 +15,7 @@ Stay on task with PUCOTI, a countdown timer built for simplicity and purpose.
 - **Total Time**: Shows the total time you've spent on the timer.
 - **Configurable**: Change the bell sound, waste time changing colors, and more.
 - **Basic Controls**: Add or subtract time, reset the timer, but not more.
+- **No Pause**: No pause button. Time always moves forward.
 
 PUCOTI is straightforward and gets the job done. Give it a try.
 
