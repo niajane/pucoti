@@ -629,6 +629,8 @@ def main(
                 window_has_focus = True
             elif event.type == pg.WINDOWFOCUSLOST:
                 window_has_focus = False
+            elif event.type == pg.TEXTINPUT and scene == Scene.ENTERING_PURPOSE:
+                purpose += event.text
             elif event.type == pg.KEYDOWN:
                 if scene == Scene.HELP:
                     scene = Scene.MAIN
@@ -637,8 +639,6 @@ def main(
                         purpose = purpose[:-1]
                     elif event.key in (pg.K_RETURN, pg.K_KP_ENTER, pg.K_ESCAPE):
                         scene = Scene.MAIN
-                    elif event.unicode:
-                        purpose += event.unicode
                 elif scene == Scene.PURPOSE_HISTORY:
                     if event.key == pg.K_j:
                         history_scroll = max(0, history_scroll - 1)
