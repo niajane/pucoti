@@ -582,6 +582,7 @@ def main(
     window = sdl2.Window("PUCOTI", window_size, borderless=True, always_on_top=True, resizable=True)
     window.get_surface().fill((0, 0, 0))
     window.flip()
+    window_has_focus = True
 
     screen = window.get_surface()
     clock = pygame.time.Clock()
@@ -624,6 +625,10 @@ def main(
         for event in pygame.event.get():
             if event.type == pg.QUIT:
                 sys.exit()
+            elif event.type == pg.WINDOWFOCUSGAINED:
+                window_has_focus = True
+            elif event.type == pg.WINDOWFOCUSLOST:
+                window_has_focus = False
             elif event.type == pg.KEYDOWN:
                 if scene == Scene.HELP:
                     scene = Scene.MAIN
@@ -759,6 +764,10 @@ def main(
                 header_line_color=purpose_color,
             )
             screen.blit(s, s.get_rect(center=purpose_history_rect.center))
+
+        # Show border if focused
+        if window_has_focus:
+            pygame.draw.rect(screen, purpose_color, screen.get_rect(), 1)
 
         # If \ is pressed, show the rects in locals()
         if pygame.key.get_pressed()[pg.K_BACKSLASH]:
