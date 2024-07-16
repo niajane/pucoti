@@ -636,9 +636,13 @@ def main(
                     scene = Scene.MAIN
                 elif scene == Scene.ENTERING_PURPOSE:
                     if event.key == pg.K_BACKSPACE:
-                        purpose = purpose[:-1]
+                        if event.mod & pg.KMOD_CTRL:
+                            purpose = re.sub(r"\S*\s*$", "", purpose)
+                        else:
+                            purpose = purpose[:-1]
                     elif event.key in (pg.K_RETURN, pg.K_KP_ENTER, pg.K_ESCAPE):
                         scene = Scene.MAIN
+
                 elif scene == Scene.PURPOSE_HISTORY:
                     if event.key == pg.K_j:
                         history_scroll = max(0, history_scroll - 1)
