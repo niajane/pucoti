@@ -393,6 +393,7 @@ def clamp(value, mini, maxi):
         return mini
     if value > maxi:
         return maxi
+    return value
 
 
 def adjust_window_size(window, scale_factor: float):
