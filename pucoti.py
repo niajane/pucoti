@@ -748,8 +748,8 @@ def main(
                 pygame.draw.line(screen, purpose_color, r.topright, r.bottomright, 2)
 
         # Render time.
+        remaining = timer_end - (time() - start)
         if time_rect := layout.get("time"):
-            remaining = timer_end - (time() - start)
             color = timer_up_color if remaining < 0 else timer_color
             t = big_font.render(
                 fmt_duration(abs(remaining)), time_rect.size, color, monospaced_time=True
@@ -842,6 +842,7 @@ def main(
 
         elif remaining > 0:
             nb_rings = 0
+            last_rung = 0
 
         # And execute the callbacks.
         for callback in callbacks:
