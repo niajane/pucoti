@@ -56,8 +56,12 @@ WINDOW_SCALE = 1.2
 MIN_HEIGHT = 5
 MIN_WIDTH = 15
 POSITIONS = [(-5, -5), (5, 5), (5, -5), (-5, 5)]
+NUMBER_KEYS = [pg.K_0, pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K_9]
 SHORTCUTS = """
-J K: -/+ 1 minute
+j k: -/+ 1 minute
+J K: -/+ 5 minutes
+numbers: set duration
+NUMBERS: set duration *10min
 R: reset timer
 RETURN: enter purpose
 L: list purpose history
@@ -158,6 +162,11 @@ def fmt_time_absoulte(seconds):
 
 def fmt_time(seconds, relative=True):
     return fmt_time_relative(seconds) if relative else fmt_time_absoulte(seconds)
+
+
+def compute_timer_end(timer, start):
+    # +0.5 to show visually round time -> more satisfying
+    return timer + (round(time() + 0.5) - start)
 
 
 def shorten(text: str, max_len: int) -> str:
@@ -570,6 +579,14 @@ def StyleOpt(help=None, **kwargs):
     return Option(help=help, rich_help_panel="Style", **kwargs)
 
 
+def shift_is_pressed(event):
+    return event.mod & pygame.KMOD_SHIFT
+
+
+def get_number_from_key(key):
+    return int(pygame.key.name(key))
+
+
 @app.command(
     help="Stay on task with PUCOTI, a countdown timer built for simplicity and purpose.\n\nGUI Shortcuts:\n\n"
     + SHORTCUTS.replace("\n", "\n\n")
@@ -618,7 +635,7 @@ def main(
 
     initial_duration = human_duration(initial_timer)
     start = round(time())
-    timer = initial_duration
+    timer_end = initial_duration
     last_rung = 0
     nb_rings = 0
     callbacks = [CountdownCallback(time_and_command) for time_and_command in run_at]
@@ -680,12 +697,17 @@ def main(
                     else:
                         scene = Scene.MAIN
                 elif event.key == pg.K_j:
-                    timer -= 60
+                    timer_end -= 60 * 5 if shift_is_pressed(event) else 60
                 elif event.key == pg.K_k:
-                    timer += 60
+                    timer_end += 60 * 5 if shift_is_pressed(event) else 60
+                elif event.key in NUMBER_KEYS:
+                    new_duration = 60 * get_number_from_key(event.key)
+                    if shift_is_pressed(event):
+                        new_duration *= 10
+                    timer_end = compute_timer_end(new_duration, start)
+                    initial_duration = new_duration
                 elif event.key == pg.K_r:
-                    # +0.5 to show visually round time -> more satisfying
-                    timer = initial_duration + (round(time() + 0.5) - start)
+                    timer_end = compute_timer_end(initial_duration, start)
                 elif event.key == pg.K_MINUS:
                     adjust_window_size(window, 1 / WINDOW_SCALE)
                     place_window(window, *POSITIONS[position])
@@ -727,7 +749,7 @@ def main(
 
         # Render time.
         if time_rect := layout.get("time"):
-            remaining = timer - (time() - start)
+            remaining = timer_end - (time() - start)
             color = timer_up_color if remaining < 0 else timer_color
             t = big_font.render(
                 fmt_duration(abs(remaining)), time_rect.size, color, monospaced_time=True
@@ -753,7 +775,7 @@ def main(
             screen.blit(t, t.get_rect(midright=purpose_time_rect.midright))
 
         if help_rect := layout.get("help"):
-            title = "PICOTI Bindings"
+            title = "PUCOTI Bindings"
             s = normal_font.table(
                 [line.split(": ") for line in SHORTCUTS.split("\n")],  # type: ignore
                 help_rect.size,
@@ -816,14 +838,14 @@ def main(
             nb_rings += 1
             play(bell)
             if restart:
-                timer = initial_duration + (round(time() + 0.5) - start)
+                timer_end = initial_duration + (round(time() + 0.5) - start)
 
         elif remaining > 0:
             nb_rings = 0
 
         # And execute the callbacks.
         for callback in callbacks:
-            callback.update(timer - (time() - start))
+            callback.update(timer_end - (time() - start))
 
         window.flip()
         clock.tick(30)
