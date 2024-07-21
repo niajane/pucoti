@@ -388,18 +388,25 @@ class DFont:
         return surf
 
 
-def adjust_window_size(window, window_dimensions_ratio: float, scale_factor: float):
-    new_width = window.size[0] * scale_factor
-    new_height = new_width/window_dimensions_ratio
+def clamp(value, mini, maxi):
+    if value < mini:
+        return mini
+    if value > maxi:
+        return maxi
 
+
+def adjust_window_size(window, scale_factor: float):
     display_info = pygame.display.Info()
     max_width = display_info.current_w
     max_height = display_info.current_h
 
-    width_within_bounds = MIN_WIDTH <= new_width <= max_width
-    height_within_bounds = MIN_HEIGHT <= new_height <= max_height
-    if width_within_bounds and height_within_bounds:
-        window.size = new_width, new_height
+    new_width = window.size[0] * scale_factor
+    new_height = window.size[1] * scale_factor
+
+    clamped_new_width = clamp(new_width, MIN_WIDTH, max_width)
+    clamped_new_height = clamp(new_height, MIN_HEIGHT, max_height)
+
+    window.size = clamped_new_width, clamped_new_height
 
 
 def place_window(window, x: int, y: int):
@@ -595,7 +602,6 @@ def main(
     pygame.mixer.init()
     pygame.key.set_repeat(300, 20)
 
-    window_dimensions_ratio = window_size[0] / window_size[1]
     window = sdl2.Window("PUCOTI", window_size, borderless=True, always_on_top=True, resizable=True)
     window.get_surface().fill((0, 0, 0))
     window.flip()
@@ -671,10 +677,10 @@ def main(
                     # +0.5 to show visually round time -> more satisfying
                     timer = initial_duration + (round(time() + 0.5) - start)
                 elif event.key == pg.K_MINUS:
-                    adjust_window_size(window, window_dimensions_ratio, 1 / WINDOW_SCALE)
+                    adjust_window_size(window, 1 / WINDOW_SCALE)
                     place_window(window, *POSITIONS[position])
                 elif event.key == pg.K_PLUS or event.key == pg.K_EQUALS:
-                    adjust_window_size(window, window_dimensions_ratio, WINDOW_SCALE)
+                    adjust_window_size(window, WINDOW_SCALE)
                     place_window(window, *POSITIONS[position])
                 elif event.key == pg.K_p:
                     position = (position + 1) % len(POSITIONS)
