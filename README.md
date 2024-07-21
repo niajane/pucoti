@@ -47,3 +47,9 @@ That's it! PUCOTI should now be up and running.
 ## Usage
 
 ![Usage](./assets/cli-help.webp)
+
+
+## Contributors
+
+A warm thank you to all the contributors who have helped make PUCOTI better and gave their precious time 💖⌛
+- [@niajane](https://github.com/ddorn/pucoti/commits?author=niajane)
