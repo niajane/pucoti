@@ -53,6 +53,8 @@ BELL = ASSETS / "bell.mp3"
 BIG_FONT = ASSETS / "Bevan-Regular.ttf"
 FONT = BIG_FONT
 WINDOW_SCALE = 1.2
+MIN_HEIGHT = 5
+MIN_WIDTH = 15
 POSITIONS = [(-5, -5), (5, 5), (5, -5), (-5, 5)]
 SHORTCUTS = """
 J K: -/+ 1 minute
@@ -386,6 +388,28 @@ class DFont:
         return surf
 
 
+def clamp(value, mini, maxi):
+    if value < mini:
+        return mini
+    if value > maxi:
+        return maxi
+    return value
+
+
+def adjust_window_size(window, scale_factor: float):
+    display_info = pygame.display.Info()
+    max_width = display_info.current_w
+    max_height = display_info.current_h
+
+    new_width = window.size[0] * scale_factor
+    new_height = window.size[1] * scale_factor
+
+    clamped_new_width = clamp(new_width, MIN_WIDTH, max_width)
+    clamped_new_height = clamp(new_height, MIN_HEIGHT, max_height)
+
+    window.size = clamped_new_width, clamped_new_height
+
+
 def place_window(window, x: int, y: int):
     """Place the window at the desired position."""
 
@@ -663,9 +687,11 @@ def main(
                     # +0.5 to show visually round time -> more satisfying
                     timer = initial_duration + (round(time() + 0.5) - start)
                 elif event.key == pg.K_MINUS:
-                    window.size = (window.size[0] / WINDOW_SCALE, window.size[1] / WINDOW_SCALE)
+                    adjust_window_size(window, 1 / WINDOW_SCALE)
+                    place_window(window, *POSITIONS[position])
                 elif event.key == pg.K_PLUS or event.key == pg.K_EQUALS:
-                    window.size = (window.size[0] * WINDOW_SCALE, window.size[1] * WINDOW_SCALE)
+                    adjust_window_size(window, WINDOW_SCALE)
+                    place_window(window, *POSITIONS[position])
                 elif event.key == pg.K_p:
                     position = (position + 1) % len(POSITIONS)
                     place_window(window, *POSITIONS[position])
