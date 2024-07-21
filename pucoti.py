@@ -38,8 +38,6 @@ from enum import Enum
 import random
 import atexit
 
-from event_key_utils import NUMBER_KEYS, get_number_from_key, shift_is_pressed
-
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 if os.environ.get("SDL_VIDEODRIVER") == "wayland":
@@ -56,6 +54,7 @@ BIG_FONT = ASSETS / "Bevan-Regular.ttf"
 FONT = BIG_FONT
 WINDOW_SCALE = 1.2
 POSITIONS = [(-5, -5), (5, 5), (5, -5), (-5, 5)]
+NUMBER_KEYS = [pg.K_0, pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K_9]
 SHORTCUTS = """
 J K: -/+ 1 minute
 U L: -/+ 5 minutes
@@ -160,8 +159,10 @@ def fmt_time_absoulte(seconds):
 def fmt_time(seconds, relative=True):
     return fmt_time_relative(seconds) if relative else fmt_time_absoulte(seconds)
 
+
 def round_time_up_to_minute(timer, start):
     return timer + (round(time() + 0.5) - start)
+
 
 def shorten(text: str, max_len: int) -> str:
     """Shorten a text to max_len characters, adding ... if necessary."""
@@ -551,6 +552,14 @@ def StyleOpt(help=None, **kwargs):
     return Option(help=help, rich_help_panel="Style", **kwargs)
 
 
+def shift_is_pressed():
+    return pygame.key.get_mods() & pg.KMOD_SHIFT
+
+
+def get_number_from_key(key):
+    return int(pygame.key.name(key))
+
+
 @app.command(
     help="Stay on task with PUCOTI, a countdown timer built for simplicity and purpose.\n\nGUI Shortcuts:\n\n"
     + SHORTCUTS.replace("\n", "\n\n")
@@ -652,14 +661,16 @@ def main(
                     else:
                         scene = Scene.MAIN
                 elif event.key == pg.K_j:
-                    timer -= 60*5 if shift_is_pressed() else 60                    
+                    timer -= 60 * 5 if shift_is_pressed() else 60
                 elif event.key == pg.K_k:
-                    timer += 60*5 if shift_is_pressed() else 60
+                    timer += 60 * 5 if shift_is_pressed() else 60
                 elif event.key in NUMBER_KEYS:
                     if shift_is_pressed():
-                        timer = round_time_up_to_minute(60*10*get_number_from_key(event.key), start)
+                        timer = round_time_up_to_minute(
+                            60 * 10 * get_number_from_key(event.key), start
+                        )
                     else:
-                        timer = round_time_up_to_minute(60*get_number_from_key(event.key), start)
+                        timer = round_time_up_to_minute(60 * get_number_from_key(event.key), start)
                 elif event.key == pg.K_r:
                     # +0.5 to show visually round time -> more satisfying
                     timer = round_time_up_to_minute(initial_duration, start)
