@@ -19,18 +19,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 
-from dataclasses import dataclass
-import dataclasses
 import json
 import os
-import subprocess
+from pprint import pprint
 import sys
 from time import time
-from typing import Annotated
-from pathlib import Path
 import re
 import typer
-from typer import Argument, Option
+from typer import Option
 from enum import Enum
 import atexit
 
@@ -49,6 +45,7 @@ from src import platforms
 from src.dfont import DFont
 from src.purpose import Purpose
 from src.callback import CountdownCallback
+from src.config import PucotiConfig
 
 
 class Scene(Enum):
@@ -118,28 +115,11 @@ def StyleOpt(help=None, **kwargs):
     help="Stay on task with PUCOTI, a countdown timer built for simplicity and purpose.\n\nGUI Shortcuts:\n\n"
     + constants.SHORTCUTS.replace("\n", "\n\n")
 )
-def main(
-    # fmt: off
-    initial_timer: Annotated[str, Argument(help="The initial timer duration.")] = "5m",
-    bell: Annotated[Path, Option(help="Path to the bell sound file.")] = constants.BELL,
-    ring_every: Annotated[int, Option(help="The time between rings, in seconds.")] = 20,
-    ring_count: Annotated[int, Option(help="Number of rings played when the time is up.")] = -1,
-    restart: Annotated[bool, Option(help="Restart the timer when it reaches 0.")] = False,
-    run_at: Annotated[list[str], Option(help="Run a command at a specific time. Example: --run-at '-1m 30s:notify-send \"Time was up 1m30s ago!\"'")] = [],
-    timer_font: Annotated[Path, StyleOpt("Path to the font for the timer.")] = constants.BIG_FONT,
-    font: Annotated[Path, StyleOpt("Path to the font for all other text.")] = constants.FONT,
-    background_color: Annotated[tuple[int, int, int], StyleOpt()] = (0, 0, 0),
-    timer_color: Annotated[tuple[int, int, int], StyleOpt()] = (255, 224, 145),
-    timer_up_color: Annotated[tuple[int, int, int], StyleOpt()] = (255, 0, 0),
-    purpose_color: Annotated[tuple[int, int, int], StyleOpt()] = (183, 255, 183),
-    total_time_color: Annotated[tuple[int, int, int], StyleOpt()] = (183, 183, 255),
-    window_position: tuple[int, int] = (-5, -5),
-    window_size: tuple[int, int] = (220, 80),
-    history_file: Annotated[Path, Option(help="Path to the file where the purpose history is stored.")] = Path("~/.pucoti_history"),
-    # fmt: on
-) -> None:
+@PucotiConfig.mk_typer_cli("initial_duration")
+def main(config: PucotiConfig) -> None:
+    pprint(config)
 
-    history_file = history_file.expanduser()
+    history_file = config.history_file.expanduser()
     history_file.parent.mkdir(parents=True, exist_ok=True)
     history_file.touch(exist_ok=True)
 
@@ -147,25 +127,27 @@ def main(
     pygame.mixer.init()
     pygame.key.set_repeat(300, 20)
 
-    window = sdl2.Window("PUCOTI", window_size, borderless=True, always_on_top=True, resizable=True)
+    window = sdl2.Window(
+        "PUCOTI", config.window.initial_size, borderless=True, always_on_top=True, resizable=True
+    )
     window.get_surface().fill((0, 0, 0))
     window.flip()
     window_has_focus = True
 
     screen = window.get_surface()
     clock = pygame.time.Clock()
-    big_font = DFont(timer_font)
-    normal_font = DFont(font)
+    big_font = DFont(config.font.timer)
+    normal_font = DFont(config.font.rest)
 
     position = 0
-    platforms.place_window(window, *window_position)
+    platforms.place_window(window, *config.window.initial_position)
 
-    initial_duration = time_utils.human_duration(initial_timer)
+    initial_duration = time_utils.human_duration(config.initial_timer)
     start = round(time())
     timer_end = initial_duration
     last_rung = 0
     nb_rings = 0
-    callbacks = [CountdownCallback(time_and_command) for time_and_command in run_at]
+    callbacks = [CountdownCallback(cfg) for cfg in config.run_at]
 
     purpose_history = [
         Purpose(**json.loads(line))
@@ -265,23 +247,23 @@ def main(
 
         layout = scene.mk_layout(window.size, bool(purpose), hide_total)
 
-        screen.fill(background_color)
+        screen.fill(config.color.background)
 
         # Render purpose, if there is space.
         if purpose_rect := layout.get("purpose"):
-            t = normal_font.render(purpose, purpose_rect.size, purpose_color)
+            t = normal_font.render(purpose, purpose_rect.size, config.color.purpose)
             r = screen.blit(t, t.get_rect(center=purpose_rect.center))
             if scene == Scene.ENTERING_PURPOSE and (time() % 1) < 0.7:
                 if r.height == 0:
                     r.height = purpose_rect.height
                 if r.right >= purpose_rect.right:
                     r.right = purpose_rect.right - 3
-                pygame.draw.line(screen, purpose_color, r.topright, r.bottomright, 2)
+                pygame.draw.line(screen, config.color.purpose, r.topright, r.bottomright, 2)
 
         # Render time.
         remaining = timer_end - (time() - start)
         if time_rect := layout.get("time"):
-            color = timer_up_color if remaining < 0 else timer_color
+            color = config.color.timer_up if remaining < 0 else config.color.timer
             t = big_font.render(
                 time_utils.fmt_duration(abs(remaining)),
                 time_rect.size,
@@ -294,7 +276,7 @@ def main(
             t = normal_font.render(
                 time_utils.fmt_duration(time() - start),
                 total_time_rect.size,
-                total_time_color,
+                config.color.total_time,
                 monospaced_time=True,
             )
             screen.blit(t, t.get_rect(midleft=total_time_rect.midleft))
@@ -303,7 +285,7 @@ def main(
             t = normal_font.render(
                 time_utils.fmt_duration(time() - purpose_start_time),
                 purpose_time_rect.size,
-                purpose_color,
+                config.color.purpose,
                 monospaced_time=True,
             )
             screen.blit(t, t.get_rect(midright=purpose_time_rect.midright))
@@ -313,11 +295,11 @@ def main(
             s = normal_font.table(
                 [line.split(": ") for line in constants.SHORTCUTS.split("\n")],  # type: ignore
                 help_rect.size,
-                [purpose_color, timer_color],
+                [config.color.purpose, config.color.timer],
                 title=title,
                 col_sep=": ",
                 align=[pg.FONT_RIGHT, pg.FONT_LEFT],
-                title_color=timer_color,
+                title_color=config.color.timer,
             )
             screen.blit(s, s.get_rect(center=help_rect.center))
 
@@ -341,19 +323,19 @@ def main(
             s = normal_font.table(
                 [headers] + rows,
                 purpose_history_rect.size,
-                [total_time_color, purpose_color, timer_color],
+                [config.color.total_time, config.color.purpose, config.color.timer],
                 title="History",
                 col_sep=": ",
                 align=[pg.FONT_RIGHT, pg.FONT_LEFT, pg.FONT_RIGHT],
-                title_color=purpose_color,
+                title_color=config.color.purpose,
                 hidden_rows=hidden_rows,
-                header_line_color=purpose_color,
+                header_line_color=config.color.purpose,
             )
             screen.blit(s, s.get_rect(center=purpose_history_rect.center))
 
         # Show border if focused
         if window_has_focus:
-            pygame.draw.rect(screen, purpose_color, screen.get_rect(), 1)
+            pygame.draw.rect(screen, config.color.purpose, screen.get_rect(), 1)
 
         # If \ is pressed, show the rects in locals()
         if pygame.key.get_pressed()[pg.K_BACKSLASH]:
@@ -367,11 +349,15 @@ def main(
                     screen.blit(t, rect.topleft)
 
         # Ring the bell if the time is up.
-        if remaining < 0 and time() - last_rung > ring_every and nb_rings != ring_count:
+        if (
+            remaining < 0
+            and time() - last_rung > config.ring_every
+            and nb_rings != config.ring_count
+        ):
             last_rung = time()
             nb_rings += 1
-            pygame_utils.play(bell)
-            if restart:
+            pygame_utils.play(config.bell)
+            if config.restart:
                 timer_end = initial_duration + (round(time() + 0.5) - start)
 
         elif remaining > 0:

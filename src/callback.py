@@ -1,18 +1,16 @@
 import subprocess
 
 from src import time_utils
+from src.config import RunAtConfig
+
 
 
 class CountdownCallback:
     """Call a command once the timer goes below a specific time."""
 
-    def __init__(self, time_and_command: str) -> None:
-        time, _, command = time_and_command.partition(":")
-        self.command = command
-        if isinstance(time, str):
-            self.time = time_utils.human_duration(time)
-        else:
-            self.time = time
+    def __init__(self, cfg: RunAtConfig) -> None:
+        self.command = cfg.cmd
+        self.time = time_utils.human_duration(cfg.at)
         self.executed = False
 
     def update(self, current_time: float):

@@ -4,21 +4,21 @@ from typing import Annotated
 
 import typer
 
-import constants
-from base_config import Config
+from src import constants
+from src.base_config import Config
 
 
 @dataclass(frozen=True)
 class RunAtConfig(Config):
     at: str = "-1m"
     cmd: str = "notify-send 'Time is up by one minute!'"
-    every: str | None = None
+    # every: str | None = None
 
 
 @dataclass(frozen=True)
 class FontConfig(Config):
-    timer: Path = constants.BIG_FONT
-    rest: Path = constants.FONT
+    timer: Annotated[Path, "Font file for the big timer"] = constants.BIG_FONT
+    rest: Annotated[Path, "Font for everything else"] = constants.FONT
 
 
 Color = tuple[int, int, int]
@@ -32,6 +32,7 @@ class ColorConfig(Config):
     timer_up: Color = (255, 0, 0)
     purpose: Color = (183, 255, 183)
     total_time: Color = (183, 183, 255)
+    background: Color = (0, 0, 0)
 
 
 @dataclass(frozen=True)
@@ -49,17 +50,21 @@ class PucotiConfig(Config):
     You can have multiple presets, by separating the yaml documents with "---".
     """
 
-    preset: str = "default"
+    # preset: str = "default"
     initial_timer: Annotated[str, "The initial timer duration"] = "5m"
-    bell: Path = constants.BELL
-    ring_every: int = 20
-    ring_count: int = -1
-    restart: bool = False
-    run_at: list[RunAtConfig] = field(default_factory=list)
-    history_file: Path = Path("~/.pucoti_history")
+    bell: Annotated[Path, "Path to the file played when time is up"] = constants.BELL
+    ring_every: Annotated[int, "Time between bells, in seconds"] = 20
+    ring_count: Annotated[int, "Number of bells played when the time is up. -1 means no limit."] = (
+        -1
+    )
+    restart: Annotated[bool, "Restart the timer when it reaches 0"] = False
+    history_file: Annotated[Path, "Path to save the history of purposes"] = Path(
+        "~/.pucoti_history"
+    )
     font: FontConfig = FontConfig()
     color: ColorConfig = ColorConfig()
     window: WindowConfig = WindowConfig()
+    run_at: list[RunAtConfig] = field(default_factory=list)
 
 
 if __name__ == "__main__":

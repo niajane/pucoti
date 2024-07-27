@@ -1,11 +1,14 @@
 from pathlib import Path
+from pprint import pprint
 from typing import Annotated, Any, Self, TypeAliasType, get_origin
-from dataclasses import dataclass, fields, is_dataclass, MISSING, asdict
+from dataclasses import dataclass, fields, MISSING
 from textwrap import dedent, indent
 
 import yaml
 import typer
 import inspect
+
+from src import constants
 
 
 AnnotatedType = type(Annotated[int, "dummy"])
@@ -14,58 +17,119 @@ AnnotatedType = type(Annotated[int, "dummy"])
 @dataclass(frozen=True)
 class Config:
     """The base class for configuration defined by dataclasses by the developer
-    and modified using yaml by the user."""
+    and modified using yaml by the user.
 
-    @classmethod
-    def load(cls, conf: str | dict) -> Self:
-        if isinstance(conf, str):
+
+    This is not a battleproof implementation.
+    In particular, it has no support for arbitrary dicts as values (only dataclasses aka. Config),
+    limited support for lists and no support for custom types.
+    Errors by users will likely raise understandable exceptions, but errors from devs will
+    likely not, as the code with type hints is too messy and britle.
+    """
+
+    def load(self, conf: str | dict | Path) -> Self:
+        if isinstance(conf, Path):
+            data = yaml.safe_load(conf.read_text())
+        elif isinstance(conf, str):
             data = yaml.safe_load(conf)
         else:
             data = conf
 
         # This is a bit messy, and I garantee that this function will not work for
         # evert `config_cls` thrown at it. It will work for most that use only
-        # simple type hints. It will not work for unions not dicts.
+        # simple type hints. It will not work for unions nor dicts.
         # When it doesn't work because of unsupported config_cls, it will not
         # throw meaningful error messages, but if its `conf` input is invalid,
         # it does its best to throw a meaningful ValueError.
 
-        # Convert to the correct types
-        def convert(data, cls):
-            try:
-                # If Annotated, strip the annotation
-                if isinstance(cls, AnnotatedType):
-                    cls = cls.__origin__
-                if isinstance(cls, TypeAliasType):
-                    cls = cls.__value__
+        def path_to_str(path, name: None | str = None):
+            if name:
+                path = path + (name,)
+            return ".".join(path)
 
-                if is_dataclass(cls):
-                    return cls(
-                        **{
-                            field.name: convert(value, field.type)
-                            for field, value in zip(fields(cls), data.values())
-                        }
+        to_update = {}
+
+        def gather_updates(path: tuple, data, expected_type, is_inside_list=False):
+            print(path, expected_type)
+            # If Annotated, strip the annotation
+            if isinstance(expected_type, AnnotatedType):
+                expected_type = expected_type.__origin__
+            if isinstance(expected_type, TypeAliasType):
+                expected_type = expected_type.__value__
+
+            if Config.is_config(expected_type):
+                fields_by_name = {field.name: field for field in fields(expected_type)}
+                converted_data = {}
+                for name, value in data.items():
+                    if name not in fields_by_name:
+                        valid_fields = ", ".join(fields_by_name)
+                        raise ValueError(
+                            f"Unknown field {path_to_str(path, name)}. Valid fields are {valid_fields}"
+                        )
+                    converted_data[name] = gather_updates(
+                        path + (name,),
+                        value,
+                        fields_by_name[name].type,
+                        is_inside_list=is_inside_list,
                     )
-                elif get_origin(cls) is list:
-                    assert isinstance(data, list)
-                    return cls.__origin__(convert(d, cls.__args__[0]) for d in data)
-                elif get_origin(cls) is tuple:
-                    assert isinstance(data, (list, tuple))
-                    return cls.__origin__(convert(d, typ) for d, typ in zip(data, cls.__args__))
-                elif isinstance(data, cls):
-                    return data
-                elif cls in (str, int, float, Path):
-                    return cls(data)
-                else:
-                    raise ValueError(f"Expected {cls}, got {data}")
-            except TypeError as e:
-                raise ValueError(f"Error converting {data} to {cls}") from e
 
-        return convert(data, cls)
+                return expected_type(**converted_data)
+
+            elif get_origin(expected_type) in (list, tuple):
+                if not isinstance(data, (list, tuple)):
+                    raise ValueError(f"Expected a list at {path_to_str(path)}, got {data}")
+                elif get_origin(expected_type) is tuple:
+                    collection_type = tuple
+                    sub_types = expected_type.__args__
+                    if len(sub_types) != len(data):
+                        raise ValueError(
+                            f"Expected a tuple of size {len(sub_types)} at {path_to_str(path)}, got {len(data)}"
+                        )
+                else:
+                    collection_type = list
+                    sub_types = [expected_type.__args__[0]] * len(data)
+                # There is no merging of lists/tuples, we overwrite the full list.
+                converted_data = collection_type(
+                    gather_updates(path + (i,), d, sub_types[i], is_inside_list=True)
+                    for i, d in enumerate(data)
+                )
+                print(converted_data, "list")
+                if not is_inside_list:
+                    to_update[path] = converted_data
+                return converted_data
+
+            elif expected_type in (str, int, float, Path, bool):
+                converted_data = expected_type(data)
+                if not is_inside_list:
+                    to_update[path] = converted_data
+                return converted_data
+
+            else:
+                raise ValueError(f"Unsupported type {expected_type} at {path_to_str(path)}")
+
+        gather_updates((), data, type(self))
+
+        # Make the flat dict into a recursive one
+        def unflatten(d):
+            out = {}
+            for path, value in d.items():
+                obj = out
+                for part in path[:-1]:
+                    obj = obj.setdefault(part, {})
+                obj[path[-1]] = value
+            return out
+
+        pprint(to_update)
+        to_update = unflatten(to_update)
+        pprint(to_update)
+
+        return self.merge(to_update)
 
     @staticmethod
-    def is_config(cls: type):
-        return is_dataclass(cls) and issubclass(cls, Config)
+    def is_config(type_hint):
+        if isinstance(type_hint, AnnotatedType):
+            type_hint = type_hint.__origin__
+        return issubclass(type_hint, Config)
 
     @classmethod
     def gather_parameters(cls, prefix: str = "") -> dict[str, type]:
@@ -105,8 +169,8 @@ class Config:
             except AttributeError:
                 pass
 
-            if is_dataclass(fld.type):
-                assert issubclass(fld.type, Config)
+            if cls.is_config(fld.type):
+                # assert issubclass(fld.type, Config)
                 out.append(f"{fld.name}:")
                 out.append(indent(fld.type.generate_default_config_yaml(), "  "))
                 continue
@@ -122,19 +186,23 @@ class Config:
 
         return "\n".join(part.rstrip() for part in out)
 
-    def merge(self, values: dict[str, Any]):
-        """Merge the values using a flat dict. Dots (.) are use for nested updates."""
+    def merge(self, values: dict[str, dict | Any]):
+        """Return a new config with the values provided replaced.
 
-        data = asdict(self)
+        Does not perform any validation of paths nor types. For this, use .load()
+        """
 
-        for name, value in values.items():
-            parts = name.split(".")
-            obj = data
-            for part in parts[:-1]:
-                obj = data.setdefault(part, {})
-            obj[parts[-1]] = value
+        kwargs = {}
+        for field in fields(self):
+            if field.name not in values:
+                continue
 
-        return self.load(data)
+            if self.is_config(field.type):
+                kwargs[field.name] = getattr(self, field.name).merge(values[field.name])
+            else:
+                kwargs[field.name] = values[field.name]
+
+        return type(self)(**kwargs)
 
     def get(self, name: str):
         obj = self
@@ -151,6 +219,7 @@ class Config:
 
         Use as:
 
+        @app.command()
         @Config.mk_typer_cli("arg1", "arg2"):
         def main(config: Config):
             ...
@@ -167,7 +236,7 @@ class Config:
                 param_type = typer.Option
 
             if isinstance(typ, AnnotatedType):
-                help = typ.__args__[0]
+                help = typ.__metadata__[0]
                 typ = typ.__origin__
             else:
                 help = None
@@ -202,8 +271,8 @@ class Config:
         # Create the function
         def decorator(f):
             def decorated(**kwargs):
-                config = cls()
-                print(kwargs)
+                config = cls().load(constants.CONFIG_FILE)
+
                 params_overwritten_by_cli = {
                     normalised_to_true_name[name]: value for name, value in kwargs.items()
                 }

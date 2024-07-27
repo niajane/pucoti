@@ -6,7 +6,7 @@ import pygame.locals as pg
 from pathlib import Path
 
 
-CONFIG_FILE = Path("~/.config/pucoti/config.yaml")
+CONFIG_FILE = Path("~/.config/pucoti/default.yaml").expanduser()
 ASSETS = Path(__file__).parent.parent / "assets"
 BELL = ASSETS / "bell.mp3"
 BIG_FONT = ASSETS / "Bevan-Regular.ttf"
