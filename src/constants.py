@@ -1,8 +1,12 @@
 import os
+
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
+
 import pygame.locals as pg
 from pathlib import Path
 
 
+CONFIG_FILE = Path("~/.config/pucoti/config.yaml")
 ASSETS = Path(__file__).parent.parent / "assets"
 BELL = ASSETS / "bell.mp3"
 BIG_FONT = ASSETS / "Bevan-Regular.ttf"
