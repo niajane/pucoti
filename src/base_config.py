@@ -138,7 +138,13 @@ class Config:
         for fld in fields(cls):
             if cls.is_config(fld.type):
                 params.update(fld.type.gather_parameters(prefix + fld.name + "."))
-            elif get_origin(fld.type) in (list, dict):
+            elif get_origin(fld.type) is list:
+                base_type = fld.type.__args__[0]
+                # If base_type can be prompted in a single are (like int, str, etc)
+                # Then we can make this a parameter
+                if base_type in (str, int, float, Path, bool):
+                    params[prefix + fld.name] = fld.type
+            elif get_origin(fld.type) is dict:
                 pass
             else:
                 params[prefix + fld.name] = fld.type
@@ -276,7 +282,8 @@ class Config:
                 params_overwritten_by_cli = {
                     normalised_to_true_name[name]: value for name, value in kwargs.items()
                 }
-                config.merge(params_overwritten_by_cli)
+
+                config = config.merge(params_overwritten_by_cli)
                 return f(config)
 
             decorated.__signature__ = new_signature
