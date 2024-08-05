@@ -17,8 +17,8 @@ POSITIONS = [(-5, -5), (5, 5), (5, -5), (-5, 5)]
 SHORTCUTS = """
 j k: -/+ 1 minute
 J K: -/+ 5 minutes
-numbers: set duration
-NUMBERS: set duration *10min
+0-9: set duration
+shift 0-9: set duration *10min
 R: reset timer
 RETURN: enter purpose
 L: list purpose history
