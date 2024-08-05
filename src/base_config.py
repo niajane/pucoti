@@ -1,5 +1,5 @@
+from functools import partial
 from pathlib import Path
-from pprint import pprint
 from typing import Annotated, Any, Self, TypeAliasType, get_origin
 from dataclasses import dataclass, fields, MISSING
 from textwrap import dedent, indent
@@ -50,7 +50,6 @@ class Config:
         to_update = {}
 
         def gather_updates(path: tuple, data, expected_type, is_inside_list=False):
-            print(path, expected_type)
             # If Annotated, strip the annotation
             if isinstance(expected_type, AnnotatedType):
                 expected_type = expected_type.__origin__
@@ -58,6 +57,12 @@ class Config:
                 expected_type = expected_type.__value__
 
             if Config.is_config(expected_type):
+                if issubclass(expected_type, SingleArgConfig) and isinstance(data, str):
+                    converted_data = expected_type.from_string(data)
+                    if not is_inside_list:
+                        to_update[path] = converted_data
+                    return converted_data
+
                 fields_by_name = {field.name: field for field in fields(expected_type)}
                 converted_data = {}
                 for name, value in data.items():
@@ -93,7 +98,6 @@ class Config:
                     gather_updates(path + (i,), d, sub_types[i], is_inside_list=True)
                     for i, d in enumerate(data)
                 )
-                print(converted_data, "list")
                 if not is_inside_list:
                     to_update[path] = converted_data
                 return converted_data
@@ -119,9 +123,7 @@ class Config:
                 obj[path[-1]] = value
             return out
 
-        pprint(to_update)
         to_update = unflatten(to_update)
-        pprint(to_update)
 
         return self.merge(to_update)
 
@@ -144,12 +146,24 @@ class Config:
                 # Then we can make this a parameter
                 if base_type in (str, int, float, Path, bool):
                     params[prefix + fld.name] = fld.type
+                elif cls.is_config(base_type) and issubclass(base_type, SingleArgConfig):
+                    params[prefix + fld.name] = fld.type
+
             elif get_origin(fld.type) is dict:
                 pass
             else:
                 params[prefix + fld.name] = fld.type
 
         return params
+
+    @classmethod
+    def user_defined_docstring(cls) -> str | None:
+        """Return the docstring of the class, without the automatically generated part."""
+
+        if cls.__doc__ and not cls.__doc__.startswith(cls.__name__ + "("):
+            return cls.__doc__
+        # Doc is automatically generated or non existant. We don't want to show that
+        return None
 
     @classmethod
     def generate_default_config_yaml(cls) -> str:
@@ -163,11 +177,9 @@ class Config:
         def add_comment(comment: str):
             out.append(indent(dedent(comment), "# "))
 
-        if cls.__doc__:
-            doc = cls.__doc__
-            if not doc.startswith(cls.__name__ + "("):
-                # Doc is automatically generated. We don't want to show that
-                add_comment(cls.__doc__)
+        if doc := cls.user_defined_docstring():
+            add_comment(doc)
+
         for fld in fields(cls):
             try:
                 doc = fld.type.__metadata__[0]
@@ -252,6 +264,14 @@ class Config:
             else:
                 rich_panel = None
 
+            # Handle list[SingleArgConfig]
+            if get_origin(typ) is list:
+                inner_type = typ.__args__[0]
+                if cls.is_config(inner_type) and issubclass(inner_type, SingleArgConfig):
+                    help = help or typ.__args__[0].help_message()
+                    typ = list[inner_type]
+                    param_type = partial(param_type, parser=inner_type.from_string)
+
             signature[name] = Annotated[typ, param_type(help=help, rich_help_panel=rich_panel)]
 
         normalised_to_true_name = {}
@@ -290,6 +310,36 @@ class Config:
             return decorated
 
         return decorator
+
+
+@dataclass(frozen=True)
+class SingleArgConfig(Config):
+    """A config that can be input as a single typer argument."""
+
+    SEPARATOR = ":"
+
+    @classmethod
+    def help_message(cls) -> str:
+        """Return a message to be shown in the help message of the CLI."""
+
+        fmt = cls.SEPARATOR.join(field.name for field in fields(cls))
+
+        if base := cls.user_defined_docstring():
+            base += " "
+        else:
+            base = ""
+        return f"{base}Format: {fmt}"
+
+    @classmethod
+    def from_string(cls, string: str) -> Self:
+        """Parse a string into the config."""
+
+        args = string.split(cls.SEPARATOR)
+        kwargs = {}
+        for arg, field in zip(args, fields(cls), strict=True):
+            kwargs[field.name] = arg
+
+        return cls().load(kwargs)
 
 
 def to_nice_yaml(name: str, obj):

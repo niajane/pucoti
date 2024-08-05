@@ -115,7 +115,7 @@ def StyleOpt(help=None, **kwargs):
     help="Stay on task with PUCOTI, a countdown timer built for simplicity and purpose.\n\nGUI Shortcuts:\n\n"
     + constants.SHORTCUTS.replace("\n", "\n\n")
 )
-@PucotiConfig.mk_typer_cli("initial_duration")
+@PucotiConfig.mk_typer_cli("initial_timer")
 def main(config: PucotiConfig) -> None:
     pprint(config)
 

@@ -5,11 +5,13 @@ from typing import Annotated
 import typer
 
 from src import constants
-from src.base_config import Config
+from src.base_config import Config, SingleArgConfig
 
 
 @dataclass(frozen=True)
-class RunAtConfig(Config):
+class RunAtConfig(SingleArgConfig):
+    """Run commands at specific times."""
+
     at: str = "-1m"
     cmd: str = "notify-send 'Time is up by one minute!'"
     # every: str | None = None
