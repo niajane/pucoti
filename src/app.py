@@ -42,7 +42,6 @@ from src import pygame_utils
 from src import time_utils
 from src import constants
 from src import platforms
-from src.dfont import DFont
 from src.purpose import Purpose
 from src.callback import CountdownCallback
 from src.config import PucotiConfig
@@ -136,8 +135,6 @@ def main(config: PucotiConfig) -> None:
 
     screen = window.get_surface()
     clock = pygame.time.Clock()
-    big_font = DFont(config.font.timer)
-    normal_font = DFont(config.font.rest)
 
     position = 0
     platforms.place_window(window, *config.window.initial_position)
@@ -251,7 +248,7 @@ def main(config: PucotiConfig) -> None:
 
         # Render purpose, if there is space.
         if purpose_rect := layout.get("purpose"):
-            t = normal_font.render(purpose, purpose_rect.size, config.color.purpose)
+            t = config.font.normal.render(purpose, purpose_rect.size, config.color.purpose)
             r = screen.blit(t, t.get_rect(center=purpose_rect.center))
             if scene == Scene.ENTERING_PURPOSE and (time() % 1) < 0.7:
                 if r.height == 0:
@@ -264,7 +261,7 @@ def main(config: PucotiConfig) -> None:
         remaining = timer_end - (time() - start)
         if time_rect := layout.get("time"):
             color = config.color.timer_up if remaining < 0 else config.color.timer
-            t = big_font.render(
+            t = config.font.big.render(
                 time_utils.fmt_duration(abs(remaining)),
                 time_rect.size,
                 color,
@@ -273,7 +270,7 @@ def main(config: PucotiConfig) -> None:
             screen.blit(t, t.get_rect(center=time_rect.center))
 
         if total_time_rect := layout.get("total_time"):
-            t = normal_font.render(
+            t = config.font.normal.render(
                 time_utils.fmt_duration(time() - start),
                 total_time_rect.size,
                 config.color.total_time,
@@ -282,7 +279,7 @@ def main(config: PucotiConfig) -> None:
             screen.blit(t, t.get_rect(midleft=total_time_rect.midleft))
 
         if purpose_time_rect := layout.get("purpose_time"):
-            t = normal_font.render(
+            t = config.font.normal.render(
                 time_utils.fmt_duration(time() - purpose_start_time),
                 purpose_time_rect.size,
                 config.color.purpose,
@@ -292,7 +289,7 @@ def main(config: PucotiConfig) -> None:
 
         if help_rect := layout.get("help"):
             title = "PUCOTI Bindings"
-            s = normal_font.table(
+            s = config.font.normal.table(
                 [line.split(": ") for line in constants.SHORTCUTS.split("\n")],  # type: ignore
                 help_rect.size,
                 [config.color.purpose, config.color.timer],
@@ -320,7 +317,7 @@ def main(config: PucotiConfig) -> None:
             rows = rows[first_shown:last_shown]
 
             headers = ["Span", "Purpose [J/K]", "Started [L]"]
-            s = normal_font.table(
+            s = config.font.normal.table(
                 [headers] + rows,
                 purpose_history_rect.size,
                 [config.color.total_time, config.color.purpose, config.color.timer],
@@ -339,7 +336,7 @@ def main(config: PucotiConfig) -> None:
 
         # If \ is pressed, show the rects in locals()
         if pygame.key.get_pressed()[pg.K_BACKSLASH]:
-            debug_font = normal_font.get_font(20)
+            debug_font = config.font.normal.get_font(20)
             for name, rect in locals().items():
                 if isinstance(rect, pygame.Rect):
                     color = pygame_utils.random_color(name)

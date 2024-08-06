@@ -1,3 +1,4 @@
+from functools import cached_property
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from typing import Annotated
@@ -5,6 +6,7 @@ from typing import Annotated
 import typer
 
 from src import constants
+from src.dfont import DFont
 from src.base_config import Config, SingleArgConfig
 
 
@@ -21,6 +23,14 @@ class RunAtConfig(SingleArgConfig):
 class FontConfig(Config):
     timer: Annotated[Path, "Font file for the big timer"] = constants.BIG_FONT
     rest: Annotated[Path, "Font for everything else"] = constants.FONT
+
+    @cached_property
+    def big(self):
+        return DFont(self.timer)
+
+    @cached_property
+    def normal(self):
+        return DFont(self.rest)
 
 
 Color = tuple[int, int, int]
