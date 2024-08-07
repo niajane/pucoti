@@ -297,7 +297,10 @@ class Config:
         # Create the function
         def decorator(f):
             def decorated(**kwargs):
-                config = cls().load(constants.CONFIG_FILE)
+                try:
+                    config = cls().load(constants.CONFIG_FILE)
+                except FileNotFoundError:
+                    config = cls()
 
                 params_overwritten_by_cli = {
                     normalised_to_true_name[name]: value for name, value in kwargs.items()
