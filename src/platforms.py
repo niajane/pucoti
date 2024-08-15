@@ -13,10 +13,6 @@ import pygame
 # Diego uses sway, and it needs a few tweaks as it's a non-standard window manager.
 RUNS_ON_SWAY = os.environ.get("SWAYSOCK") is not None
 
-# Diego's version of pygame-ce fails to run directly on Wayland, so I force it to use X11.
-if os.environ.get("SDL_VIDEODRIVER") == "wayland":
-    os.environ["SDL_VIDEODRIVER"] = "x11"
-
 
 def place_window(window, x: int, y: int):
     """Place the window at the desired position."""
